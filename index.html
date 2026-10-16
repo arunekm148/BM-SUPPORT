@@ -78,6 +78,11 @@
 
   <!-- React Application Source Code -->
   <script type="text/babel">
+    // Cache Migration: Purge legacy cached demo users so only Super Admin is loaded
+    try {
+      ['bms_users_v1', 'bms_users_v2', 'bms_users_v3', 'bms_users_v4'].forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+
     const { useState, useEffect, useMemo, useRef } = React;
 
     // ==========================================
@@ -366,166 +371,6 @@
         mustChangePassword: false,
         salt: 'salt_adm_99',
         passwordHash: '45b80761ce6e2985e5af18ee685e35e1732c20fa39a8806440edf7d9ca25c356'
-      },
-      {
-        id: 'usr-bm-01',
-        userId: 'marcus.bm',
-        name: 'Arun Joy',
-        employeeId: 'BM-701',
-        role: 'BRANCH_MANAGER',
-        roleLabel: '🏢 Branch Manager',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-admin-01',
-        reportsToName: 'Alexandre Sterling (Super Admin)',
-        phone: '+91 98450 11000',
-        email: 'marcus.bm@metroagency.com',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_bm_88',
-        passwordHash: '3a42b135652d0c7c099fc8f29203f6f93b2d768e4e310c97582b7a55b7c1639b'
-      },
-      {
-        id: 'usr-fls-01',
-        userId: 'vikram.fls',
-        name: 'Vikram Malhotra',
-        employeeId: 'SM-101',
-        role: 'SALES_MANAGER',
-        roleLabel: '👔 Direct Sales Manager (FLS)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-bm-01',
-        reportsToName: 'Arun Joy (Branch Manager)',
-        phone: '+91 98450 11223',
-        email: 'vikram.sm@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_fls_11',
-        passwordHash: '1499f1078ce122af49f274e6d5f794b28d7002be481c5d65c6b8ec6f160e0d27'
-      },
-      {
-        id: 'usr-fls-02',
-        userId: 'priya.fls',
-        name: 'Priya Sharma',
-        employeeId: 'SM-102',
-        role: 'SALES_MANAGER',
-        roleLabel: '👔 Direct Sales Manager (FLS)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Digital Agency Vertical',
-        reportsToId: 'usr-bm-01',
-        reportsToName: 'Arun Joy (Branch Manager)',
-        phone: '+91 98450 33445',
-        email: 'priya.sm@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_fls_22',
-        passwordHash: 'd30a7cbff0371fa481d0bf56668c994d8035ab972d7df60f4eb0bf8bd2f6f65f'
-      },
-      {
-        id: 'usr-tse-01',
-        userId: 'rohan.tse',
-        name: 'Rohan Deshmukh',
-        employeeId: 'TSE-201',
-        role: 'TSE',
-        roleLabel: '🤝 Territory Sales Executive (TSE)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-fls-01',
-        reportsToName: 'Vikram Malhotra (SM-101)',
-        phone: '+91 97410 44556',
-        email: 'rohan.tse@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_tse_11',
-        passwordHash: 'c8d5aa1112d266cdeef0981076122b55a4f64b88f9704df7dd8daec9d5a4f567'
-      },
-      {
-        id: 'usr-tse-02',
-        userId: 'kavita.tse',
-        name: 'Kavita Rao',
-        employeeId: 'TSE-202',
-        role: 'TSE',
-        roleLabel: '🤝 Territory Sales Executive (TSE)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Digital Agency Vertical',
-        reportsToId: 'usr-fls-02',
-        reportsToName: 'Priya Sharma (SM-102)',
-        phone: '+91 98220 55667',
-        email: 'kavita.tse@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_tse_22',
-        passwordHash: '45703fb5b5f9bfd4198ad5e38d9bac7ca7c2e4a83cc9171b293a2a1a6a40d52d'
-      },
-      {
-        id: 'usr-ag-01',
-        userId: 'suresh.ag',
-        name: 'Suresh Nair',
-        employeeId: 'AG-301',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-tse-01',
-        reportsToName: 'Rohan Deshmukh (TSE-201)',
-        phone: '+91 98450 77889',
-        email: 'suresh.ag@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_ag_11',
-        passwordHash: 'dd07c7cb152418b24423feb525c0e3f415abf9b2841fd6c23f11ac09cb62b902'
-      },
-      {
-        id: 'usr-ag-02',
-        userId: 'meera.ag',
-        name: 'Meera Patel',
-        employeeId: 'AG-302',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-tse-01',
-        reportsToName: 'Rohan Deshmukh (TSE-201)',
-        phone: '+91 98450 88990',
-        email: 'meera.ag@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_ag_22',
-        passwordHash: '6cb7bc89a0d7d95d3d19f0b0eacf2c9ab346e2ad8f219008bac310ed2b7c9462'
-      },
-      {
-        id: 'usr-ag-03',
-        userId: 'rajesh.ag',
-        name: 'Rajesh Khurana',
-        employeeId: 'AG-303',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        branchLocation: 'Thodupuzha Branch',
-        tenantId: 'tnt-101',
-        organization: 'ManipalCigna',
-        vertical: 'Digital Agency Vertical',
-        reportsToId: 'usr-tse-02',
-        reportsToName: 'Kavita Rao (TSE-202)',
-        phone: '+91 98110 99001',
-        email: 'rajesh.ag@branchagency.internal',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_ag_33',
-        passwordHash: 'ab5aabb09579dfd2d3af761f8bc9240768aa5a69be9e3a5b7b48b119d1e57134'
       }
     ];
 
@@ -2406,7 +2251,7 @@
       // 1. User Database & Session
       const [users, setUsers] = useState(() => {
         try {
-          const saved = localStorage.getItem('bms_users_v3');
+          const saved = localStorage.getItem('bms_users_v5');
           return saved ? JSON.parse(saved) : INITIAL_USERS;
         } catch (e) {
           return INITIAL_USERS;
@@ -2442,9 +2287,13 @@
           const sessionStr = localStorage.getItem('bms_auth_session_v3');
           if (!sessionStr) return null;
           const session = JSON.parse(sessionStr);
-          const savedUsersStr = localStorage.getItem('bms_users_v3');
+          const savedUsersStr = localStorage.getItem('bms_users_v5');
           const userList = savedUsersStr ? JSON.parse(savedUsersStr) : INITIAL_USERS;
-          const found = userList.find(u => u.userId.toLowerCase() === (session.userId || '').toLowerCase() && u.status === 'Active');
+          const found = userList.find(u => 
+            (u.userId.toLowerCase() === (session.userId || '').toLowerCase() || 
+             (u.role === 'SUPER_ADMIN' && (session.userId === 'superadmin' || session.userId === 'arunarumaliljoy@gmail.com'))) && 
+            u.status === 'Active'
+          );
           return found || null;
         } catch (e) {
           return null;
@@ -2456,9 +2305,13 @@
           const sessionStr = localStorage.getItem('bms_auth_session_v3');
           if (!sessionStr) return false;
           const session = JSON.parse(sessionStr);
-          const savedUsersStr = localStorage.getItem('bms_users_v3');
+          const savedUsersStr = localStorage.getItem('bms_users_v5');
           const userList = savedUsersStr ? JSON.parse(savedUsersStr) : INITIAL_USERS;
-          const found = userList.find(u => u.userId.toLowerCase() === (session.userId || '').toLowerCase() && u.status === 'Active');
+          const found = userList.find(u => 
+            (u.userId.toLowerCase() === (session.userId || '').toLowerCase() || 
+             (u.role === 'SUPER_ADMIN' && (session.userId === 'superadmin' || session.userId === 'arunarumaliljoy@gmail.com'))) && 
+            u.status === 'Active'
+          );
           return !!found;
         } catch(e) {
           return false;
@@ -2496,7 +2349,7 @@
         name: '',
         employeeId: '',
         userId: '',
-        role: 'SALES_MANAGER',
+        role: 'BRANCH_MANAGER',
         password: '',
         phone: '',
         email: '',
@@ -2504,8 +2357,8 @@
         tenantId: 'tnt-101',
         organization: 'ManipalCigna',
         vertical: 'Branch Agency Vertical',
-        reportsToId: 'usr-bm-01',
-        reportsToName: 'Arun Joy (Branch Manager)',
+        reportsToId: 'usr-admin-01',
+        reportsToName: 'Arun Joy (Super Admin)',
         status: 'Active',
         mustChangePassword: true,
         showPassword: false
@@ -4617,12 +4470,16 @@
         try { localStorage.setItem('bms_branch_team_v2', JSON.stringify(updatedTeam)); } catch(e) {}
 
         // Soft delete / inactive in users
-        setUsers(prev => prev.map(u => {
-          if (u.employeeId === deleteTargetMember.code || u.id === deleteTargetMember.id || (u.name && u.name.toLowerCase() === deleteTargetMember.name.toLowerCase())) {
-            return { ...u, status: 'Inactive', deleted: true };
-          }
-          return u;
-        }));
+        setUsers(prev => {
+          const next = prev.map(u => {
+            if (u.employeeId === deleteTargetMember.code || u.id === deleteTargetMember.id || (u.name && u.name.toLowerCase() === deleteTargetMember.name.toLowerCase())) {
+              return { ...u, status: 'Inactive', deleted: true };
+            }
+            return u;
+          });
+          try { localStorage.setItem('bms_users_v5', JSON.stringify(next)); } catch(e) {}
+          return next;
+        });
 
         // Call backend API
         try {
@@ -5454,7 +5311,7 @@
         });
 
         setUsers(updatedUsers);
-        try { localStorage.setItem('bms_users_v3', JSON.stringify(updatedUsers)); } catch(e) {}
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch(e) {}
 
         const updatedCurrent = {
           ...currentUser,
@@ -5526,7 +5383,7 @@
             name: '',
             employeeId: 'EMP-' + Math.floor(1000 + Math.random() * 9000),
             userId: '',
-            role: 'SALES_MANAGER',
+            role: 'BRANCH_MANAGER',
             password: 'User@' + Math.floor(1000 + Math.random() * 9000),
             phone: '+91 98',
             email: '',
@@ -5534,8 +5391,8 @@
             tenantId: selectedTenant ? selectedTenant.id : 'tnt-101',
             organization: selectedTenant ? (selectedTenant.companyName || 'ManipalCigna') : 'ManipalCigna',
             vertical: 'Branch Agency Vertical',
-            reportsToId: 'usr-bm-01',
-            reportsToName: 'Arun Joy (Branch Manager)',
+            reportsToId: 'usr-admin-01',
+            reportsToName: 'Arun Joy (Super Admin)',
             status: 'Active',
             mustChangePassword: true,
             showPassword: true
@@ -5598,7 +5455,7 @@
 
           const updated = [newUser, ...users];
           setUsers(updated);
-          try { localStorage.setItem('bms_users_v3', JSON.stringify(updated)); } catch(e) {}
+          try { localStorage.setItem('bms_users_v5', JSON.stringify(updated)); } catch(e) {}
           logAuditEvent('USER_CREATED', currentUser ? currentUser.userId : 'admin', `Created user @${newUser.userId} (${newUser.role})`);
           setShowUserModal(false);
           showToast(`✓ User account @${newUser.userId} created successfully!`, 'success');
@@ -5636,7 +5493,7 @@
           });
 
           setUsers(updated);
-          try { localStorage.setItem('bms_users_v3', JSON.stringify(updated)); } catch(e) {}
+          try { localStorage.setItem('bms_users_v5', JSON.stringify(updated)); } catch(e) {}
           logAuditEvent('USER_UPDATED', currentUser ? currentUser.userId : 'admin', `Updated user @${userForm.userId}`);
           setShowUserModal(false);
           showToast(`✓ User account @${userForm.userId} updated successfully!`, 'success');
@@ -5652,7 +5509,7 @@
         const newStatus = targetUser.status === 'Active' ? 'Inactive' : 'Active';
         const updated = users.map(u => u.id === targetUser.id ? { ...u, status: newStatus } : u);
         setUsers(updated);
-        try { localStorage.setItem('bms_users_v3', JSON.stringify(updated)); } catch(e) {}
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updated)); } catch(e) {}
         logAuditEvent(newStatus === 'Active' ? 'USER_ACTIVATED' : 'USER_DEACTIVATED', currentUser ? currentUser.userId : 'admin', `Account @${targetUser.userId} set to ${newStatus}`);
         showToast(`User @${targetUser.userId} is now ${newStatus}.`, 'info');
       };
@@ -5682,7 +5539,7 @@
         });
 
         setUsers(updated);
-        try { localStorage.setItem('bms_users_v3', JSON.stringify(updated)); } catch(e) {}
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updated)); } catch(e) {}
         logAuditEvent('USER_PASSWORD_RESET_BY_ADMIN', currentUser ? currentUser.userId : 'admin', `Reset password for @${targetUserForReset.userId}`);
         setShowResetUserPasswordModal(false);
         showToast(`✓ Password for @${targetUserForReset.userId} reset! (Temporary password: ${newResetPassword})`, 'success');
@@ -5849,7 +5706,7 @@
           setCurrentUser(updatedUser);
           setUsers(prev => {
             const next = prev.map(u => u.id === currentUser.id ? { ...u, name: adminProfileForm.name, email: adminProfileForm.email } : u);
-            try { localStorage.setItem('bms_users_v3', JSON.stringify(next)); } catch(err) {}
+            try { localStorage.setItem('bms_users_v5', JSON.stringify(next)); } catch(err) {}
             return next;
           });
         }
@@ -5879,7 +5736,7 @@
         const newHash = hashPassword(adminPasswordForm.newPassword, adminUser.salt);
         const updatedUsers = users.map(u => u.id === adminUser.id ? { ...u, passwordHash: newHash, mustChangePassword: false } : u);
         setUsers(updatedUsers);
-        try { localStorage.setItem('bms_users_v3', JSON.stringify(updatedUsers)); } catch (err) {}
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch (err) {}
 
         logAuditEvent('PASSWORD_CHANGED', adminUser.userId, 'Super Admin updated password via Profile Modal');
         setAdminPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', showCurrent: false, showNew: false });
@@ -6106,7 +5963,7 @@
                       value={forgotPasswordQuery}
                       onChange={(e) => setForgotPasswordQuery(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                      placeholder="e.g. marcus.bm or superadmin"
+                      placeholder="e.g. arunarumaliljoy@gmail.com or User ID"
                     />
                   </div>
                   {forgotPasswordResult && (
@@ -15280,7 +15137,7 @@
                           value={userForm.userId}
                           onChange={(e) => setUserForm({ ...userForm, userId: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') })}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 pl-7 text-white font-mono font-bold"
-                          placeholder="marcus.bm"
+                          placeholder="e.g. bm.thodupuzha"
                         />
                       </div>
                     </div>
@@ -15411,28 +15268,39 @@
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
                     >
                       {userForm.role === 'BRANCH_MANAGER' ? (
-                        <option value="usr-admin-01">Alexandre Sterling (Super Admin / Commercial Landlord)</option>
+                        <option value="usr-admin-01">Arun Joy (Super Admin / Platform Owner)</option>
                       ) : userForm.role === 'SALES_MANAGER' ? (
-                        users.filter(u => u.role === 'BRANCH_MANAGER').map(u => (
-                          <option key={u.id} value={u.id}>{u.name} (Branch Manager - {u.branchLocation})</option>
-                        ))
+                        <>
+                          <option value="usr-admin-01">Arun Joy (Super Admin / Platform Owner)</option>
+                          {users.filter(u => u.role === 'BRANCH_MANAGER').map(u => (
+                            <option key={u.id} value={u.id}>{u.name} (Branch Manager - {u.branchLocation})</option>
+                          ))}
+                        </>
                       ) : userForm.role === 'TSE' ? (
                         <>
-                          <optgroup label="🏢 Branch Managers (Direct Reportee)">
-                            {users.filter(u => u.role === 'BRANCH_MANAGER').map(u => (
-                              <option key={u.id} value={u.id}>{u.name} (Branch Manager - {u.branchLocation})</option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="👔 FLS / Sales Managers">
-                            {users.filter(u => u.role === 'SALES_MANAGER').map(u => (
-                              <option key={u.id} value={u.id}>{u.name} (FLS Manager - {u.vertical})</option>
-                            ))}
-                          </optgroup>
+                          <option value="usr-admin-01">Arun Joy (Super Admin / Platform Owner)</option>
+                          {users.filter(u => u.role === 'BRANCH_MANAGER').length > 0 && (
+                            <optgroup label="🏢 Branch Managers (Direct Reportee)">
+                              {users.filter(u => u.role === 'BRANCH_MANAGER').map(u => (
+                                <option key={u.id} value={u.id}>{u.name} (Branch Manager - {u.branchLocation})</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {users.filter(u => u.role === 'SALES_MANAGER').length > 0 && (
+                            <optgroup label="👔 FLS / Sales Managers">
+                              {users.filter(u => u.role === 'SALES_MANAGER').map(u => (
+                                <option key={u.id} value={u.id}>{u.name} (FLS Manager - {u.vertical})</option>
+                              ))}
+                            </optgroup>
+                          )}
                         </>
                       ) : (
-                        users.filter(u => u.role === 'TSE' || u.role === 'SALES_MANAGER').map(u => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.roleLabel})</option>
-                        ))
+                        <>
+                          <option value="usr-admin-01">Arun Joy (Super Admin / Platform Owner)</option>
+                          {users.filter(u => u.role === 'TSE' || u.role === 'SALES_MANAGER' || u.role === 'BRANCH_MANAGER').map(u => (
+                            <option key={u.id} value={u.id}>{u.name} ({u.roleLabel})</option>
+                          ))}
+                        </>
                       )}
                     </select>
                   </div>
