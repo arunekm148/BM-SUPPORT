@@ -78,9 +78,28 @@
 
   <!-- React Application Source Code -->
   <script type="text/babel">
-    // Cache Migration: Purge legacy cached demo users so only Super Admin is loaded
+    // Cache Migration: Purge all legacy demo data so the system starts 100% FRESH
     try {
-      ['bms_users_v1', 'bms_users_v2', 'bms_users_v3', 'bms_users_v4'].forEach(k => localStorage.removeItem(k));
+      if (!localStorage.getItem('bms_clean_fresh_v8')) {
+        const demoStorageKeys = [
+          'bms_users_v1', 'bms_users_v2', 'bms_users_v3', 'bms_users_v4', 'bms_users_v5',
+          'bms_auth_session_v1', 'bms_auth_session_v2', 'bms_auth_session_v3',
+          'bms_commercial_tenants_v1',
+          'bms_commercial_recharges_v1',
+          'bms_branch_team_v1', 'bms_branch_team_v2', 'bms_branch_team_v3',
+          'bms_policies_v1', 'bms_policies_v2', 'bms_policies_v3',
+          'bms_leads_v1',
+          'bms_renewals_v1',
+          'bms_contests_v1',
+          'bms_agent_clubs_v1',
+          'bms_mbga_config_v1',
+          'bms_products_v1',
+          'bms_messages_v1',
+          'bms_activities_v1'
+        ];
+        demoStorageKeys.forEach(k => localStorage.removeItem(k));
+        localStorage.setItem('bms_clean_fresh_v8', 'true');
+      }
     } catch (e) {}
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -247,107 +266,12 @@
     // ==========================================
     // 2. COMMERCIAL TENANTS (CLIENTS RENTING THE SOFTWARE)
     // ==========================================
-    const INITIAL_TENANTS = [
-      {
-        id: 'tnt-101',
-        companyName: 'Metro Central Agency Network',
-        branchLocation: 'Metro Central Branch',
-        contactPerson: 'Marcus Vance',
-        role: 'Branch Manager',
-        email: 'marcus.vance@agencybiz.internal',
-        phone: '+91 98201 11223',
-        rentedPlan: 'Growth Quarterly',
-        cycle: 'Quarterly',
-        rentalFee: 2699,
-        validFrom: '2026-10-01',
-        validUntil: '2026-12-31',
-        status: 'Active Rental',
-        totalPaid: 8097,
-        mappedUserId: 'user-bm-1'
-      },
-      {
-        id: 'tnt-102',
-        companyName: 'Digital Agency Direct Ltd',
-        branchLocation: 'Digital Agency Cell',
-        contactPerson: 'Ananya Sen',
-        role: 'Frontline Sales Manager',
-        email: 'ananya.sen@agencybiz.internal',
-        phone: '+91 98203 33445',
-        rentedPlan: 'Professional Half-Yearly (Hal)',
-        cycle: 'Half-Yearly',
-        rentalFee: 4999,
-        validFrom: '2026-09-15',
-        validUntil: '2027-03-15',
-        status: 'Active Rental',
-        totalPaid: 9998,
-        mappedUserId: 'user-fls-digital'
-      },
-      {
-        id: 'tnt-103',
-        companyName: 'Apex Insurance Franchise',
-        branchLocation: 'West Coast Hub',
-        contactPerson: 'Vikram Malhotra',
-        role: 'Frontline Sales Manager',
-        email: 'vikram.m@agencybiz.internal',
-        phone: '+91 98202 22334',
-        rentedPlan: 'Starter Monthly',
-        cycle: 'Monthly',
-        rentalFee: 999,
-        validFrom: '2026-09-01',
-        validUntil: '2026-10-01',
-        status: 'Expired',
-        totalPaid: 1998,
-        mappedUserId: 'user-fls-branch'
-      }
-    ];
+    const INITIAL_TENANTS = [];
 
     // ==========================================
     // 3. RECHARGE & RENTAL BILLING HISTORY
     // ==========================================
-    const INITIAL_RECHARGES = [
-      {
-        id: 'rec-101',
-        invoiceNo: 'INV-2026-8801',
-        tenantId: 'tnt-101',
-        branchName: 'Metro Central Branch',
-        clientName: 'Marcus Vance (Metro Central Agency)',
-        planName: 'Growth Quarterly',
-        cycle: 'Quarterly',
-        amount: 2699,
-        paymentDate: '2026-10-01 10:30',
-        validUntil: '2026-12-31',
-        paymentMethod: 'UPI AutoPay',
-        status: 'Paid & Active'
-      },
-      {
-        id: 'rec-102',
-        invoiceNo: 'INV-2026-8802',
-        tenantId: 'tnt-102',
-        branchName: 'Digital Agency Cell',
-        clientName: 'Ananya Sen (Digital Agency Direct)',
-        planName: 'Professional Half-Yearly (Hal)',
-        cycle: 'Half-Yearly',
-        amount: 4999,
-        paymentDate: '2026-09-15 14:20',
-        validUntil: '2027-03-15',
-        paymentMethod: 'Corporate Net Banking',
-        status: 'Paid & Active'
-      },
-      {
-        id: 'rec-103',
-        invoiceNo: 'INV-2026-8799',
-        tenantId: 'tnt-103',
-        branchName: 'West Coast Hub',
-        clientName: 'Vikram Malhotra (Apex Franchise)',
-        planName: 'Starter Monthly',
-        cycle: 'Monthly',
-        amount: 999,
-        paymentDate: '2026-09-01 09:15',
-        validUntil: '2026-10-01',
-        paymentMethod: 'Corporate Credit Card',
-        status: 'Expired'
-      }
-    ];
+    const INITIAL_RECHARGES = [];
 
     // ==========================================
     // 4. BMS CLOUD AUTHORIZED USER REPOSITORY
@@ -519,1619 +443,33 @@
         history: [
           { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Product & Product Credit Master' }
         ]
-      },
-      {
-        id: 'prod-101-tdp',
-        name: 'CareShield Comprehensive (Thodupuzha Custom Credit)',
-        code: 'CS-COMP-TDP',
-        insurer: 'ManipalCigna',
-        category: 'Comprehensive Health',
-        minSumInsured: 500000,
-        scope: 'CLONED',
-        sourceProductId: 'prod-101',
-        sourceProductName: 'CareShield Comprehensive Health',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        creditSlabs: [
-          { id: 'slb-tdp-1', minSI: 0, maxSI: 499999, label: 'Below ₹5 Lakh', creditPercent: 0, notes: 'No Credit' },
-          { id: 'slb-tdp-2', minSI: 500000, maxSI: 9999999, label: '₹5 Lakh to ₹100 Lakh', creditPercent: 105, notes: '105% Branch Festive Override' },
-          { id: 'slb-tdp-3', minSI: 10000000, maxSI: null, label: 'Above ₹100 Lakh', creditPercent: 125, notes: '125% Zonal High-SI Incentive' }
-        ],
-        portabilityCreditPercent: 80,
-        renewalCreditPercent: 100,
-        clubEligible: true,
-        contestEligible: true,
-        multiYearAllowed: true,
-        status: 'Active',
-        createdBy: 'Arun Joy (Branch Manager)',
-        createdAt: '2026-10-04',
-        updatedAt: '2026-10-05',
-        history: [
-          { timestamp: '2026-10-04 11:30', user: 'Arun Joy (Branch Manager)', action: 'CLONED', details: 'Cloned from Central Master "CareShield Comprehensive Health" (ID: prod-101)' },
-          { timestamp: '2026-10-05 14:00', user: 'Arun Joy (Branch Manager)', action: 'MODIFIED', details: 'Adjusted ₹5L-₹100L slab to 105% and portability to 80%' }
-        ]
       }
     ];
 
     // 2. Agent Club Master (Central & Branch Clones)
-    const INITIAL_AGENT_CLUBS = [
-      {
-        id: 'clb-os',
-        name: 'Club OS (Outstation)',
-        code: 'CLB-OS',
-        period: 'Quarterly',
-        minVolume: 150000,
-        minPolicies: 5,
-        minActiveMonths: 2,
-        persistencyThreshold: 75,
-        payoutRatePercent: 20,
-        benefits: 'Outstation Travel Allowance, 20% slab override & special zonal convention passes',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club OS Master' }
-        ]
-      },
-      {
-        id: 'clb-101',
-        name: 'Bronze Club',
-        code: 'CLB-BRZ',
-        period: 'Quarterly',
-        minVolume: 100000,
-        minPolicies: 4,
-        minActiveMonths: 1,
-        persistencyThreshold: 75,
-        payoutRatePercent: 18,
-        benefits: 'Bronze Recognition Certificate, 18% slab override, basic marketing kit',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club Master' }
-        ]
-      },
-      {
-        id: 'clb-102',
-        name: 'Silver Club',
-        code: 'CLB-SLV',
-        period: 'Quarterly',
-        minVolume: 200000,
-        minPolicies: 6,
-        minActiveMonths: 2,
-        persistencyThreshold: 80,
-        payoutRatePercent: 22,
-        benefits: 'Silver Trophy, 22% payout slab, prioritized regional underwriting',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club Master' }
-        ]
-      },
-      {
-        id: 'clb-103',
-        name: 'Gold Club',
-        code: 'CLB-GLD',
-        period: 'Quarterly',
-        minVolume: 400000,
-        minPolicies: 10,
-        minActiveMonths: 3,
-        persistencyThreshold: 85,
-        payoutRatePercent: 26,
-        benefits: 'Gold Club Memento, 26% payout slab, invitation to Zonal Excellence Conclave',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club Master' }
-        ]
-      },
-      {
-        id: 'clb-104',
-        name: 'Diamond Club',
-        code: 'CLB-DMD',
-        period: 'Quarterly',
-        minVolume: 1200000,
-        minPolicies: 20,
-        minActiveMonths: 3,
-        persistencyThreshold: 88,
-        payoutRatePercent: 34,
-        benefits: 'Diamond Executive Ring, 34% payout slab, annual health checkup package, priority desk',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club Master' }
-        ]
-      },
-      {
-        id: 'clb-105',
-        name: "Chairman's Elite Club",
-        code: 'CLB-CHM',
-        period: 'Quarterly',
-        minVolume: 2000000,
-        minPolicies: 30,
-        minActiveMonths: 3,
-        persistencyThreshold: 90,
-        payoutRatePercent: 40,
-        benefits: 'Chairman Club National Summit VIP pass, 40% payout slab, luxury convention for family',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Club Master' }
-        ]
-      },
-      {
-        id: 'clb-106',
-        name: 'Gold Club (Thodupuzha Festive Special)',
-        code: 'CLB-GLD-TDP',
-        period: 'Quarterly',
-        minVolume: 350000,
-        minPolicies: 8,
-        minActiveMonths: 2,
-        persistencyThreshold: 80,
-        payoutRatePercent: 28,
-        benefits: 'Special festive target with 28% payout slab and Kerala regional convention ticket',
-        scope: 'CLONED',
-        sourceMasterId: 'clb-103',
-        sourceMasterName: 'Gold Club',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        status: 'Active',
-        createdBy: 'Arun Joy (Branch Manager)',
-        createdAt: '2026-10-04',
-        updatedAt: '2026-10-05',
-        history: [
-          { timestamp: '2026-10-04 15:00', user: 'Arun Joy (Branch Manager)', action: 'CLONED', details: 'Cloned from Central Master "Gold Club" (ID: clb-103) for Thodupuzha Branch' },
-          { timestamp: '2026-10-05 10:20', user: 'Arun Joy (Branch Manager)', action: 'MODIFIED', details: 'Adjusted volume target to ₹3,50,000 and increased payout to 28%' }
-        ]
-      }
-    ];
+    const INITIAL_AGENT_CLUBS = [];
 
     // 3. Flexible Monthly Contest Master with Central & Branch Cloned Scope
-    const INITIAL_CONTESTS = [
-      {
-        id: 'cnt-101',
-        name: 'HOH (Hall of Heroes) Q3',
-        code: 'CNT-HOH-Q3',
-        category: 'National Conclave',
-        frequency: 'Quarterly',
-        description: 'Elite agency qualification for national convention in Goa',
-        startDate: '2026-10-01',
-        endDate: '2026-10-31',
-        status: 'Active',
-        eligibleRoles: ['BRANCH_MANAGER', 'SALES_MANAGER', 'TSE', 'AGENT'],
-        targetVolume: 200000,
-        newAgentCodes: 0,
-        activeAgents: 3,
-        renewalTarget: 50000,
-        persistency: 80,
-        lossRatioCap: 65,
-        productRule: 'Comprehensive Health (SI >= 5L)',
-        portabilityAllowedPercent: 100,
-        reward: '5-Star Convention Ticket & Luxury Stay in Goa',
-        qualificationRule: 'Min ₹2L eligible volume + 3 active agents in quarter',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        conditions: [
-          { field: 'eligibleVolume', operator: '>=', value: 200000, label: 'Min Eligible Volume' },
-          { field: 'activeAgents', operator: '>=', value: 3, label: 'Min Active Agents' }
-        ],
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Contest Master' }
-        ]
-      },
-      {
-        id: 'cnt-102',
-        name: 'ADCO Advisor Drive',
-        code: 'CNT-ADCO-OCT',
-        category: 'Recruitment & Code Generation',
-        frequency: 'Monthly',
-        description: 'Direct agent recruitment drive with immediate milestone bonus',
-        startDate: '2026-10-01',
-        endDate: '2026-10-31',
-        status: 'Active',
-        eligibleRoles: ['SALES_MANAGER', 'TSE'],
-        targetVolume: 50000,
-        newAgentCodes: 5,
-        activeAgents: 2,
-        renewalTarget: 0,
-        persistency: 0,
-        lossRatioCap: 70,
-        productRule: 'All Eligible Products',
-        portabilityAllowedPercent: 0,
-        reward: '₹25,000 Team Recruitment Incentive',
-        qualificationRule: 'Min 5 new agent codes generated and active',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        conditions: [
-          { field: 'newAgentCodes', operator: '>=', value: 5, label: 'New Agent Codes' }
-        ],
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Contest Master' }
-        ]
-      },
-      {
-        id: 'cnt-103',
-        name: 'Millionaire & Mini-Millionaire Club',
-        code: 'CNT-MIL-2026',
-        category: 'High-Value Producer',
-        frequency: 'Monthly',
-        description: 'Monthly recognition for ₹5 Lakh (Mini) & ₹10 Lakh (Full) volume producers',
-        startDate: '2026-10-01',
-        endDate: '2026-10-31',
-        status: 'Active',
-        eligibleRoles: ['AGENT', 'TSE', 'SALES_MANAGER'],
-        targetVolume: 500000,
-        newAgentCodes: 0,
-        activeAgents: 0,
-        renewalTarget: 100000,
-        persistency: 85,
-        lossRatioCap: 60,
-        productRule: 'CareShield & ProHealth Prime (SI >= 10L)',
-        portabilityAllowedPercent: 100,
-        reward: 'Chairman Trophy & VIP Recognition Payout',
-        qualificationRule: 'Min ₹5L issued volume within calendar month',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        conditions: [
-          { field: 'eligibleVolume', operator: '>=', value: 500000, label: 'Volume Tier' }
-        ],
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Contest Master' }
-        ]
-      },
-      {
-        id: 'cnt-104',
-        name: 'Zonal Conclave CDO Trophy',
-        code: 'CNT-CDO-ZONAL',
-        category: 'Zonal Distribution Trophy',
-        frequency: 'Bi-Annual',
-        description: 'Territory excellence for highest persistency & branch growth',
-        startDate: '2026-10-01',
-        endDate: '2026-11-30',
-        status: 'Active',
-        eligibleRoles: ['BRANCH_MANAGER', 'SALES_MANAGER'],
-        targetVolume: 300000,
-        newAgentCodes: 3,
-        activeAgents: 5,
-        renewalTarget: 75000,
-        persistency: 85,
-        lossRatioCap: 65,
-        productRule: 'All Products (Sum Insured >= ₹5L)',
-        portabilityAllowedPercent: 80,
-        reward: 'Zonal Rolling Trophy & Leadership Grant',
-        qualificationRule: 'Min ₹3L volume + 85% persistency retention',
-        scope: 'CENTRAL',
-        sourceMasterId: null,
-        sourceMasterName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        conditions: [
-          { field: 'eligibleVolume', operator: '>=', value: 300000, label: 'Min Volume' },
-          { field: 'persistency', operator: '>=', value: 85, label: 'Min Persistency %' }
-        ],
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Contest Master' }
-        ]
-      },
-      {
-        id: 'cnt-105',
-        name: 'HOH Q3 (Thodupuzha Early Bird Conclave)',
-        code: 'CNT-HOH-TDP',
-        category: 'National Conclave',
-        frequency: 'Quarterly',
-        description: 'Thodupuzha customized early-bird qualification with festive cash grant and reduced active agent hurdle',
-        startDate: '2026-10-01',
-        endDate: '2026-10-25',
-        status: 'Active',
-        eligibleRoles: ['BRANCH_MANAGER', 'SALES_MANAGER', 'TSE', 'AGENT'],
-        targetVolume: 180000,
-        newAgentCodes: 2,
-        activeAgents: 2,
-        renewalTarget: 40000,
-        persistency: 75,
-        lossRatioCap: 65,
-        productRule: 'Comprehensive Health (SI >= 5L)',
-        portabilityAllowedPercent: 100,
-        reward: 'Goa Convention Ticket + ₹15,000 Early Bird Allowance',
-        qualificationRule: 'Min ₹1.8L eligible volume by Oct 25th',
-        scope: 'CLONED',
-        sourceMasterId: 'cnt-101',
-        sourceMasterName: 'HOH (Hall of Heroes) Q3',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        createdBy: 'Arun Joy (Branch Manager)',
-        createdAt: '2026-10-03',
-        updatedAt: '2026-10-04',
-        conditions: [
-          { field: 'eligibleVolume', operator: '>=', value: 180000, label: 'Min Eligible Volume' },
-          { field: 'activeAgents', operator: '>=', value: 2, label: 'Min Active Agents' }
-        ],
-        history: [
-          { timestamp: '2026-10-03 14:00', user: 'Arun Joy (Branch Manager)', action: 'CLONED', details: 'Cloned from Central Master "HOH (Hall of Heroes) Q3" (ID: cnt-101) for Thodupuzha Branch' },
-          { timestamp: '2026-10-04 09:30', user: 'Arun Joy (Branch Manager)', action: 'MODIFIED', details: 'Customized target to ₹1.8L and early bird cutoff Oct 25' }
-        ]
-      }
-    ];
+    const INITIAL_CONTESTS = [];
 
     // 6 & 7: 3-Category Lead Management CRM with Unlimited Follow-up History
-    const INITIAL_LEADS = [
-      {
-        id: 'lead-1',
-        name: 'Dr. Ramesh Kulkarni',
-        phone: '+91 98450 12345',
-        category: 'Business Leads',
-        subType: 'Health Floater 25L',
-        source: 'FLS Self-Generated',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        agentId: 'tm-ag-301',
-        agentName: 'Suresh Nair',
-        status: 'Interested',
-        expectedAmount: 125000,
-        nextFollowUpDate: '2026-10-14',
-        createdAt: '2026-10-05',
-        updatedAt: '2026-10-13',
-        convertedPolicyNumber: null,
-        closureReason: null,
-        history: [
-          { date: '2026-10-06 11:30', user: 'Vikram Malhotra', remarks: 'Introduced CareShield 25L Floater. Client showed keen interest.' },
-          { date: '2026-10-13 16:45', user: 'Vikram Malhotra', remarks: 'Discussed pre-existing waiting period. Follow-up scheduled for closing on 14th.' }
-        ]
-      },
-      {
-        id: 'lead-2',
-        name: 'Sunil Deshmukh',
-        phone: '+91 97410 88219',
-        category: 'Agent Recruitment Leads',
-        subType: 'Direct Agent 1A',
-        source: 'Branch Manager Referral',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        agentId: null,
-        agentName: null,
-        status: 'Follow-up',
-        expectedAmount: 0,
-        nextFollowUpDate: '2026-10-12', // Overdue
-        createdAt: '2026-10-02',
-        updatedAt: '2026-10-12',
-        convertedPolicyNumber: null,
-        closureReason: null,
-        history: [
-          { date: '2026-10-04 14:00', user: 'Vikram Malhotra', remarks: 'IRDAI licensing documents collected. Training module 1 shared.' },
-          { date: '2026-10-12 10:15', user: 'Vikram Malhotra', remarks: 'Exam slot booking due. Candidate was traveling; follow-up today.' }
-        ]
-      },
-      {
-        id: 'lead-3',
-        name: 'Pooja Hegde',
-        phone: '+91 98450 77112',
-        category: 'Business Leads',
-        subType: 'Senior Citizen Plus',
-        source: 'Agent Sourced',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        agentId: 'tm-ag-304',
-        agentName: 'Ananya Verma',
-        status: 'Follow-up',
-        expectedAmount: 65000,
-        nextFollowUpDate: '2026-10-14', // Today
-        createdAt: '2026-10-08',
-        updatedAt: '2026-10-13',
-        convertedPolicyNumber: null,
-        closureReason: null,
-        history: [
-          { date: '2026-10-09 15:30', user: 'Priya Sharma', remarks: 'Quoted ProHealth Senior Citizen plan with OPD rider.' }
-        ]
-      },
-      {
-        id: 'lead-4',
-        name: 'Deepak Merchant',
-        phone: '+91 99001 22334',
-        category: 'TSC / DL Recruitment Leads',
-        subType: 'Distribution Leader',
-        source: 'Existing TSC Referral',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: null,
-        tseName: null,
-        agentId: null,
-        agentName: null,
-        status: 'Contacted',
-        expectedAmount: 0,
-        nextFollowUpDate: '2026-10-18', // Upcoming
-        createdAt: '2026-10-10',
-        updatedAt: '2026-10-11',
-        convertedPolicyNumber: null,
-        closureReason: null,
-        history: [
-          { date: '2026-10-11 11:00', user: 'Vikram Malhotra', remarks: 'Initial discussion on TSC incentive matrix and distributor onboarding.' }
-        ]
-      },
-      {
-        id: 'lead-5',
-        name: 'Arvind Swamy',
-        phone: '+91 98112 33445',
-        category: 'Agent Recruitment Leads',
-        subType: 'Standalone Agent',
-        source: 'Direct Digital Outreach',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        agentId: null,
-        agentName: null,
-        status: 'Converted',
-        expectedAmount: 0,
-        nextFollowUpDate: '2026-10-05',
-        createdAt: '2026-09-28',
-        updatedAt: '2026-10-05',
-        convertedPolicyNumber: null,
-        closureReason: null,
-        history: [
-          { date: '2026-10-05 17:00', user: 'Priya Sharma', remarks: 'Candidate completed licensing exam. Onboarded as Standalone Agent Code AG-105.' }
-        ]
-      },
-      {
-        id: 'lead-6',
-        name: 'Vijay Chawla',
-        phone: '+91 98880 44556',
-        category: 'Business Leads',
-        subType: 'Individual Health 5L',
-        source: 'FLS Self-Generated',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        agentId: null,
-        agentName: null,
-        status: 'Lost',
-        expectedAmount: 38000,
-        nextFollowUpDate: '2026-10-09',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-09',
-        convertedPolicyNumber: null,
-        closureReason: 'Opted for employer corporate group cover',
-        history: [
-          { date: '2026-10-09 18:00', user: 'Vikram Malhotra', remarks: 'Customer decided not to purchase individual cover as company increased corporate sum insured.' }
-        ]
-      }
-    ];
+    const INITIAL_LEADS = [];
 
     // 13, 14, 15: Policy Ledger with Multi-Year Credit & Hierarchy Split Calculations
-    const INITIAL_POLICIES = [
-      // 1. Current Month (October 2026) Policies
-      {
-        id: 'pol-101',
-        policyNumber: 'POL-2026-881901',
-        customerName: 'Shalini Sharma',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1000000,
-        annualPremium: 48000,
-        termYears: 3,
-        premiumAmount: 144000,
-        eligibleVolume: 144000,
-        agentName: 'Suresh Nair',
-        agentCode: 'AG-301',
-        agentCategory: 'Direct Agent 1A',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 144000,
-        tseCredit: 144000,
-        flsCredit: 86400,
-        bmCredit: 144000,
-        clubCredit: 144000,
-        contestCredit: 144000,
-        issueDate: '2026-10-02',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-102',
-        policyNumber: 'POL-2026-881902',
-        customerName: 'Karthik Raman',
-        productName: 'ProHealth Prime Protect',
-        productCode: 'PHP-PRIME-02',
-        insurer: 'ManipalCigna',
-        businessType: 'Portability',
-        sumInsured: 750000,
-        annualPremium: 32000,
-        termYears: 2,
-        premiumAmount: 64000,
-        eligibleVolume: 64000,
-        agentName: 'Meera Patel',
-        agentCode: 'AG-302',
-        agentCategory: 'Direct Agent 1B',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 64000,
-        tseCredit: 64000,
-        flsCredit: 38400,
-        bmCredit: 64000,
-        clubCredit: 64000,
-        contestCredit: 64000,
-        issueDate: '2026-10-04',
-        paymentMethod: 'Credit Card EMI',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-103',
-        policyNumber: 'POL-2026-881903',
-        customerName: 'Girish Menon',
-        productName: 'Arogya Sanjeevani Essential',
-        productCode: 'AS-ESS-03',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 600000,
-        annualPremium: 45000,
-        termYears: 1,
-        premiumAmount: 45000,
-        eligibleVolume: 45000,
-        agentName: 'Deepak Joshi',
-        agentCode: 'AG-305',
-        agentCategory: 'Direct Agent 1B',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: null,
-        tseName: null,
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 45000,
-        tseCredit: 0,
-        flsCredit: 45000,
-        bmCredit: 45000,
-        clubCredit: 45000,
-        contestCredit: 45000,
-        issueDate: '2026-10-06',
-        paymentMethod: 'UPI AutoPay',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-104',
-        policyNumber: 'POL-2026-881904',
-        customerName: 'Meenakshi Iyer',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1000000,
-        annualPremium: 52000,
-        termYears: 1,
-        premiumAmount: 52000,
-        eligibleVolume: 52000,
-        agentName: 'Pooja Hegde',
-        agentCode: 'AG-306',
-        agentCategory: 'Direct Agent 1A',
-        flsId: null,
-        flsName: 'Direct to BM',
-        tseId: null,
-        tseName: null,
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 52000,
-        tseCredit: 0,
-        flsCredit: 0,
-        bmCredit: 52000,
-        clubCredit: 52000,
-        contestCredit: 52000,
-        issueDate: '2026-10-08',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-105',
-        policyNumber: 'POL-2026-881905',
-        customerName: 'Sunita Narain',
-        productName: 'Super Top-up Plus',
-        productCode: 'STU-PLUS-04',
-        insurer: 'ManipalCigna',
-        businessType: 'Renewal',
-        sumInsured: 2500000,
-        annualPremium: 22000,
-        termYears: 1,
-        premiumAmount: 22000,
-        eligibleVolume: 22000,
-        agentName: 'Suresh Nair',
-        agentCode: 'AG-301',
-        agentCategory: 'Direct Agent 1A',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 22000,
-        tseCredit: 22000,
-        flsCredit: 13200,
-        bmCredit: 22000,
-        clubCredit: 22000,
-        contestCredit: 22000,
-        issueDate: '2026-10-10',
-        paymentMethod: 'UPI AutoPay',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-106',
-        policyNumber: 'POL-2026-881906',
-        customerName: 'Harish Chandra',
-        productName: 'ProHealth Prime Protect',
-        productCode: 'PHP-PRIME-02',
-        insurer: 'ManipalCigna',
-        businessType: 'Portability',
-        sumInsured: 500000,
-        annualPremium: 28000,
-        termYears: 1,
-        premiumAmount: 28000,
-        eligibleVolume: 28000,
-        agentName: 'Meera Patel',
-        agentCode: 'AG-302',
-        agentCategory: 'Direct Agent 1B',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 28000,
-        tseCredit: 28000,
-        flsCredit: 16800,
-        bmCredit: 28000,
-        clubCredit: 28000,
-        contestCredit: 28000,
-        issueDate: '2026-10-12',
-        paymentMethod: 'Credit Card Annual',
-        status: 'Issued'
-      },
-
-      // 2. Last Month (September 2026) Completed Business
-      {
-        id: 'pol-201',
-        policyNumber: 'POL-2026-771801',
-        customerName: 'Vivek Oberoi',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1000000,
-        annualPremium: 85000,
-        termYears: 1,
-        premiumAmount: 85000,
-        eligibleVolume: 85000,
-        agentName: 'Suresh Nair',
-        agentCode: 'AG-301',
-        agentCategory: 'Direct Agent 1A',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 85000,
-        tseCredit: 85000,
-        flsCredit: 51000,
-        bmCredit: 85000,
-        clubCredit: 85000,
-        contestCredit: 85000,
-        issueDate: '2026-09-12',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-202',
-        policyNumber: 'POL-2026-771802',
-        customerName: 'Anil Ambani',
-        productName: 'ProHealth Prime Protect',
-        productCode: 'PHP-PRIME-02',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 800000,
-        annualPremium: 72000,
-        termYears: 1,
-        premiumAmount: 72000,
-        eligibleVolume: 72000,
-        agentName: 'Meera Patel',
-        agentCode: 'AG-302',
-        agentCategory: 'Direct Agent 1B',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: 'tm-tse-201',
-        tseName: 'Rohan Deshmukh',
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 72000,
-        tseCredit: 72000,
-        flsCredit: 43200,
-        bmCredit: 72000,
-        clubCredit: 72000,
-        contestCredit: 72000,
-        issueDate: '2026-09-18',
-        paymentMethod: 'Credit Card Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-203',
-        policyNumber: 'POL-2026-771803',
-        customerName: 'Radha Mohan',
-        productName: 'Super Top-up Plus',
-        productCode: 'STU-PLUS-04',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1500000,
-        annualPremium: 60000,
-        termYears: 1,
-        premiumAmount: 60000,
-        eligibleVolume: 60000,
-        agentName: 'Rajesh Khurana',
-        agentCode: 'AG-303',
-        agentCategory: 'Standalone Agent',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        vertical: 'Digital Agency Vertical',
-        agentCredit: 60000,
-        tseCredit: 60000,
-        flsCredit: 60000,
-        bmCredit: 60000,
-        clubCredit: 60000,
-        contestCredit: 60000,
-        issueDate: '2026-09-22',
-        paymentMethod: 'UPI AutoPay',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-204',
-        policyNumber: 'POL-2026-771804',
-        customerName: 'Kunal Kapoor',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 500000,
-        annualPremium: 35000,
-        termYears: 1,
-        premiumAmount: 35000,
-        eligibleVolume: 35000,
-        agentName: 'Deepak Joshi',
-        agentCode: 'AG-305',
-        agentCategory: 'Direct Agent 1B',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: null,
-        tseName: null,
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 35000,
-        tseCredit: 0,
-        flsCredit: 35000,
-        bmCredit: 35000,
-        clubCredit: 35000,
-        contestCredit: 35000,
-        issueDate: '2026-09-25',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-
-      // 3. Historical Policies: Last 2 Months, Last 6 Months, Last 1 Year & Dormant
-      {
-        id: 'pol-205',
-        policyNumber: 'POL-2026-661701',
-        customerName: 'Tanvi Sen',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 750000,
-        annualPremium: 48000,
-        termYears: 1,
-        premiumAmount: 48000,
-        eligibleVolume: 48000,
-        agentName: 'Rajesh Khurana',
-        agentCode: 'AG-303',
-        agentCategory: 'Standalone Agent',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        vertical: 'Digital Agency Vertical',
-        agentCredit: 48000,
-        tseCredit: 48000,
-        flsCredit: 48000,
-        bmCredit: 48000,
-        clubCredit: 48000,
-        contestCredit: 48000,
-        issueDate: '2026-08-14',
-        paymentMethod: 'Credit Card EMI',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-206',
-        policyNumber: 'POL-2026-551601',
-        customerName: 'Naveen Jindal',
-        productName: 'ProHealth Prime Protect',
-        productCode: 'PHP-PRIME-02',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1000000,
-        annualPremium: 55000,
-        termYears: 1,
-        premiumAmount: 55000,
-        eligibleVolume: 55000,
-        agentName: 'Rajesh Khurana',
-        agentCode: 'AG-303',
-        agentCategory: 'Standalone Agent',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        vertical: 'Digital Agency Vertical',
-        agentCredit: 55000,
-        tseCredit: 55000,
-        flsCredit: 55000,
-        bmCredit: 55000,
-        clubCredit: 55000,
-        contestCredit: 55000,
-        issueDate: '2026-06-20',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-207',
-        policyNumber: 'POL-2026-221301',
-        customerName: 'Anand Mahindra',
-        productName: 'CareShield Comprehensive Health',
-        productCode: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 1500000,
-        annualPremium: 110000,
-        termYears: 1,
-        premiumAmount: 110000,
-        eligibleVolume: 110000,
-        agentName: 'Ananya Verma',
-        agentCode: 'AG-304',
-        agentCategory: 'Direct Agent 1A',
-        flsId: 'tm-sm-101',
-        flsName: 'Vikram Malhotra',
-        tseId: null,
-        tseName: null,
-        vertical: 'Branch Agency Vertical',
-        agentCredit: 110000,
-        tseCredit: 0,
-        flsCredit: 110000,
-        bmCredit: 110000,
-        clubCredit: 110000,
-        contestCredit: 110000,
-        issueDate: '2026-02-10',
-        paymentMethod: 'NetBanking Annual',
-        status: 'Issued'
-      },
-      {
-        id: 'pol-208',
-        policyNumber: 'POL-2025-111001',
-        customerName: 'Vijay Shekhar',
-        productName: 'Super Top-up Plus',
-        productCode: 'STU-PLUS-04',
-        insurer: 'ManipalCigna',
-        businessType: 'New Business',
-        sumInsured: 2500000,
-        annualPremium: 180000,
-        termYears: 1,
-        premiumAmount: 180000,
-        eligibleVolume: 180000,
-        agentName: 'Neha Kulkarni',
-        agentCode: 'AG-308',
-        agentCategory: 'Direct Agent 1A',
-        flsId: 'tm-sm-102',
-        flsName: 'Priya Sharma',
-        tseId: 'tm-tse-202',
-        tseName: 'Kavita Rao',
-        vertical: 'Digital Agency Vertical',
-        agentCredit: 180000,
-        tseCredit: 180000,
-        flsCredit: 180000,
-        bmCredit: 180000,
-        clubCredit: 180000,
-        contestCredit: 180000,
-        issueDate: '2025-08-15',
-        paymentMethod: 'Credit Card Annual',
-        status: 'Issued'
-      }
-    ];
+    const INITIAL_POLICIES = [];
 
     // ========================================================
     // RENEWAL MANAGEMENT MODULE - CENTRALIZED SEED DATA
     // ========================================================
-    const INITIAL_RENEWALS = [
-      {
-        id: 'RNW-2026-1001',
-        policyNumber: 'POL-MAN-88210',
-        customerName: 'Venugopal Kurup',
-        customerMobile: '+91 98471 22334',
-        customerEmail: 'venugopal.k@example.com',
-        renewalPremium: 28500,
-        renewalDueDate: '2026-10-18',
-        renewalCycle: '2026-10',
-        productName: 'CareShield Comprehensive Health',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-301',
-        agentCode: 'AG-301',
-        agentName: 'Suresh Nair',
-        tseId: 'tm-tse-201',
-        tseCode: 'TSE-201',
-        tseName: 'Rohan Deshmukh',
-        flsId: 'tm-sm-101',
-        flsCode: 'SM-101',
-        flsName: 'Vikram Malhotra',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-88210',
-        followupStatus: 'Pending',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-17',
-        lastFollowupRemarks: 'Called once, client requested callback after office hours.',
-        lastFollowupAt: '2026-10-14 10:30 AM',
-        lastFollowupBy: 'rohan.tse',
-        lastFollowupByName: 'Rohan Deshmukh (TSE)',
-        followupHistory: [
-          {
-            id: 'fh-1001-1',
-            timestamp: '2026-10-14 10:30 AM',
-            updatedBy: 'rohan.tse',
-            updatedByName: 'Rohan Deshmukh',
-            updatedByRole: 'TSE',
-            previousStatus: 'Pending',
-            newStatus: 'Call Back',
-            remarks: 'Client requested callback after office hours.',
-            nextFollowUpDate: '2026-10-17',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-14 10:30 AM'
-      },
-      {
-        id: 'RNW-2026-1002',
-        policyNumber: 'POL-MAN-77340',
-        customerName: 'Anitha Balakrishnan',
-        customerMobile: '+91 94470 55667',
-        customerEmail: 'anitha.b@example.com',
-        renewalPremium: 45000,
-        renewalDueDate: '2026-10-12',
-        renewalCycle: '2026-10',
-        productName: 'ProHealth Senior Protect',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-301',
-        agentCode: 'AG-301',
-        agentName: 'Suresh Nair',
-        tseId: 'tm-tse-201',
-        tseCode: 'TSE-201',
-        tseName: 'Rohan Deshmukh',
-        flsId: 'tm-sm-101',
-        flsCode: 'SM-101',
-        flsName: 'Vikram Malhotra',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-77340',
-        followupStatus: 'Call Back',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-16',
-        lastFollowupRemarks: 'Customer traveling; promised to pay via UPI on return.',
-        lastFollowupAt: '2026-10-13 03:15 PM',
-        lastFollowupBy: 'suresh.ag',
-        lastFollowupByName: 'Suresh Nair (Agent)',
-        followupHistory: [
-          {
-            id: 'fh-1002-1',
-            timestamp: '2026-10-13 03:15 PM',
-            updatedBy: 'suresh.ag',
-            updatedByName: 'Suresh Nair',
-            updatedByRole: 'AGENT',
-            previousStatus: 'Pending',
-            newStatus: 'Call Back',
-            remarks: 'Customer traveling; promised to pay via UPI on return.',
-            nextFollowUpDate: '2026-10-16',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-13 03:15 PM'
-      },
-      {
-        id: 'RNW-2026-1003',
-        policyNumber: 'POL-MAN-99120',
-        customerName: 'Mathew Joseph',
-        customerMobile: '+91 98460 99881',
-        customerEmail: 'mathew.j@example.com',
-        renewalPremium: 62000,
-        renewalDueDate: '2026-10-25',
-        renewalCycle: '2026-10',
-        productName: 'Super TopUp Plus',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-302',
-        agentCode: 'AG-302',
-        agentName: 'Meera Patel',
-        tseId: 'tm-tse-201',
-        tseCode: 'TSE-201',
-        tseName: 'Rohan Deshmukh',
-        flsId: 'tm-sm-101',
-        flsCode: 'SM-101',
-        flsName: 'Vikram Malhotra',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-99120',
-        followupStatus: 'Done',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-24',
-        lastFollowupRemarks: 'Explained 10% no-claim bonus benefits. Customer confirmed payment next week.',
-        lastFollowupAt: '2026-10-14 11:45 AM',
-        lastFollowupBy: 'rohan.tse',
-        lastFollowupByName: 'Rohan Deshmukh (TSE)',
-        followupHistory: [
-          {
-            id: 'fh-1003-1',
-            timestamp: '2026-10-14 11:45 AM',
-            updatedBy: 'rohan.tse',
-            updatedByName: 'Rohan Deshmukh',
-            updatedByRole: 'TSE',
-            previousStatus: 'Pending',
-            newStatus: 'Done',
-            remarks: 'Explained 10% no-claim bonus benefits. Customer confirmed payment next week.',
-            nextFollowUpDate: '2026-10-24',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-14 11:45 AM'
-      },
-      {
-        id: 'RNW-2026-1004',
-        policyNumber: 'POL-MAN-66230',
-        customerName: 'Deepa Krishnan',
-        customerMobile: '+91 98950 11442',
-        customerEmail: 'deepa.k@example.com',
-        renewalPremium: 34000,
-        renewalDueDate: '2026-10-10',
-        renewalCycle: '2026-10',
-        productName: 'CareShield Comprehensive Health',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-303',
-        agentCode: 'AG-303',
-        agentName: 'Rajesh Khurana',
-        tseId: 'tm-tse-202',
-        tseCode: 'TSE-202',
-        tseName: 'Kavita Rao',
-        flsId: 'tm-sm-102',
-        flsCode: 'SM-102',
-        flsName: 'Priya Sharma',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-66230',
-        followupStatus: 'Renewed',
-        renewalStatus: 'Renewed',
-        nextFollowUpDate: '',
-        lastFollowupRemarks: 'Premium received via netbanking payment link. Policy renewed successfully.',
-        lastFollowupAt: '2026-10-10 04:20 PM',
-        lastFollowupBy: 'kavita.tse',
-        lastFollowupByName: 'Kavita Rao (TSE)',
-        followupHistory: [
-          {
-            id: 'fh-1004-1',
-            timestamp: '2026-10-10 04:20 PM',
-            updatedBy: 'kavita.tse',
-            updatedByName: 'Kavita Rao',
-            updatedByRole: 'TSE',
-            previousStatus: 'Pending',
-            newStatus: 'Renewed',
-            remarks: 'Premium received via netbanking payment link. Policy renewed successfully.',
-            nextFollowUpDate: '',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-10 04:20 PM'
-      },
-      {
-        id: 'RNW-2026-1005',
-        policyNumber: 'POL-MAN-55102',
-        customerName: 'Sujith Narayanan',
-        customerMobile: '+91 97455 33221',
-        customerEmail: 'sujith.n@example.com',
-        renewalPremium: 51500,
-        renewalDueDate: '2026-10-30',
-        renewalCycle: '2026-10',
-        productName: 'Arogya Sanjeevani Standard',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-303',
-        agentCode: 'AG-303',
-        agentName: 'Rajesh Khurana',
-        tseId: 'tm-tse-202',
-        tseCode: 'TSE-202',
-        tseName: 'Kavita Rao',
-        flsId: 'tm-sm-102',
-        flsCode: 'SM-102',
-        flsName: 'Priya Sharma',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-55102',
-        followupStatus: 'Not Reachable',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-17',
-        lastFollowupRemarks: 'Phone switched off, sent WhatsApp reminder with payment link.',
-        lastFollowupAt: '2026-10-15 02:00 PM',
-        lastFollowupBy: 'kavita.tse',
-        lastFollowupByName: 'Kavita Rao (TSE)',
-        followupHistory: [
-          {
-            id: 'fh-1005-1',
-            timestamp: '2026-10-15 02:00 PM',
-            updatedBy: 'kavita.tse',
-            updatedByName: 'Kavita Rao',
-            updatedByRole: 'TSE',
-            previousStatus: 'Pending',
-            newStatus: 'Not Reachable',
-            remarks: 'Phone switched off, sent WhatsApp reminder with payment link.',
-            nextFollowUpDate: '2026-10-17',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-15 02:00 PM'
-      },
-      {
-        id: 'RNW-2026-1006',
-        policyNumber: 'POL-MAN-44890',
-        customerName: 'Gopinath Pillai',
-        customerMobile: '+91 98450 77123',
-        customerEmail: 'gopinath.p@example.com',
-        renewalPremium: 39000,
-        renewalDueDate: '2026-10-22',
-        renewalCycle: '2026-10',
-        productName: 'ProHealth Prime Protect',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-304',
-        agentCode: 'AG-304',
-        agentName: 'Ananya Verma',
-        tseId: null,
-        tseCode: null,
-        tseName: null,
-        flsId: 'tm-sm-101',
-        flsCode: 'SM-101',
-        flsName: 'Vikram Malhotra',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-44890',
-        followupStatus: 'Pending',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-18',
-        lastFollowupRemarks: 'Renewal notice emailed. Follow-up call pending.',
-        lastFollowupAt: '2026-10-12 09:00 AM',
-        lastFollowupBy: 'vikram.fls',
-        lastFollowupByName: 'Vikram Malhotra (FLS)',
-        followupHistory: [
-          {
-            id: 'fh-1006-1',
-            timestamp: '2026-10-12 09:00 AM',
-            updatedBy: 'vikram.fls',
-            updatedByName: 'Vikram Malhotra',
-            updatedByRole: 'SALES_MANAGER',
-            previousStatus: 'Pending',
-            newStatus: 'Pending',
-            remarks: 'Renewal notice emailed. Follow-up call pending.',
-            nextFollowUpDate: '2026-10-18',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-12 09:00 AM'
-      },
-      {
-        id: 'RNW-2026-1007',
-        policyNumber: 'POL-MAN-33789',
-        customerName: 'Latha Varma',
-        customerMobile: '+91 98472 88441',
-        customerEmail: 'latha.v@example.com',
-        renewalPremium: 22000,
-        renewalDueDate: '2026-10-28',
-        renewalCycle: '2026-10',
-        productName: 'Critical Illness Shield',
-        branchId: 'tnt-101',
-        branchName: 'Thodupuzha Branch',
-        agentId: 'tm-ag-305',
-        agentCode: 'AG-305',
-        agentName: 'Deepak Joshi',
-        tseId: null,
-        tseCode: null,
-        tseName: null,
-        flsId: 'tm-sm-102',
-        flsCode: 'SM-102',
-        flsName: 'Priya Sharma',
-        paymentLink: 'https://pay.manipalcigna.com/renew/POL-MAN-33789',
-        followupStatus: 'Call Back',
-        renewalStatus: 'Pending Payment',
-        nextFollowUpDate: '2026-10-20',
-        lastFollowupRemarks: 'Asked to call back on 20th Oct after salary credit.',
-        lastFollowupAt: '2026-10-14 05:00 PM',
-        lastFollowupBy: 'priya.fls',
-        lastFollowupByName: 'Priya Sharma (FLS)',
-        followupHistory: [
-          {
-            id: 'fh-1007-1',
-            timestamp: '2026-10-14 05:00 PM',
-            updatedBy: 'priya.fls',
-            updatedByName: 'Priya Sharma',
-            updatedByRole: 'SALES_MANAGER',
-            previousStatus: 'Pending',
-            newStatus: 'Call Back',
-            remarks: 'Asked to call back on 20th Oct after salary credit.',
-            nextFollowUpDate: '2026-10-20',
-            previousMobile: null,
-            newMobile: null
-          }
-        ],
-        mobileChangeHistory: [],
-        unmatched: false,
-        unmatchedReason: null,
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-14 05:00 PM'
-      }
-    ];
+    const INITIAL_RENEWALS = [];
 
     // 24: Manager Daily Activity Logging
-    const INITIAL_ACTIVITIES = [
-      { id: 'act-1', type: 'Customer Call', targetName: 'Dr. Ramesh Kulkarni', managerName: 'Vikram Malhotra', date: '2026-10-13', expectedBusiness: 125000, notes: 'Clarified waiting period on pre-existing hypertension.', bmReviewed: true, bmFeedback: 'Close before 15th.' },
-      { id: 'act-2', type: 'Agent Recruitment Call', targetName: 'Sunil Deshmukh', managerName: 'Vikram Malhotra', date: '2026-10-12', expectedBusiness: 0, notes: 'Followed up on IRDAI exam prep modules.', bmReviewed: true, bmFeedback: 'Ensure registration by Wednesday.' },
-      { id: 'act-3', type: 'TSC Field Visit', targetName: 'Rohan Deshmukh', managerName: 'Vikram Malhotra', date: '2026-10-11', expectedBusiness: 200000, notes: 'Conducted joint field work with North City distributor agents.', bmReviewed: true, bmFeedback: 'Good pipeline activation.' },
-      { id: 'act-4', type: 'Customer Meeting', targetName: 'Pooja Hegde', managerName: 'Priya Sharma', date: '2026-10-13', expectedBusiness: 65000, notes: 'Shared detailed brochure and premium illustration with client.', bmReviewed: false, bmFeedback: '' }
-    ];
+    const INITIAL_ACTIVITIES = [];
 
-    const INITIAL_MESSAGES = [
-      { id: 'msg-1', channel: 'general-branch', senderName: 'Marcus Vance', senderRole: 'Branch Manager', timestamp: '2026-10-13 09:30', text: 'Good morning Metro Central team! October quota push is active.' }
-    ];
+    const INITIAL_MESSAGES = [];
 
     // Branch Team Roster with Multi-Tier Hierarchy: BM -> Sales Manager (FLS) -> TSE -> Agents
-    const INITIAL_BRANCH_TEAM = [
-      // Level 2: Direct Sales Managers (FLS) - Reports to Branch Manager
-      {
-        id: 'tm-sm-101',
-        tenantId: 'tnt-101',
-        name: 'Vikram Malhotra',
-        code: 'SM-101',
-        role: 'SALES_MANAGER',
-        roleLabel: '👔 Direct Sales Manager (FLS)',
-        reportsToId: 'bm-head',
-        reportsToName: 'Branch Manager',
-        email: 'vikram.sm@branchagency.internal',
-        phone: '+91 98450 11223',
-        vertical: 'Branch Agency Vertical',
-        territory: 'Central Metro Hub',
-        clubTier: null,
-        agentType: null,
-        joinedDate: '2026-01-10',
-        status: 'Active'
-      },
-      {
-        id: 'tm-sm-102',
-        tenantId: 'tnt-101',
-        name: 'Priya Sharma',
-        code: 'SM-102',
-        role: 'SALES_MANAGER',
-        roleLabel: '👔 Direct Sales Manager (FLS)',
-        reportsToId: 'bm-head',
-        reportsToName: 'Branch Manager',
-        email: 'priya.sm@branchagency.internal',
-        phone: '+91 98450 33445',
-        vertical: 'Digital Agency Vertical',
-        territory: 'Digital Direct Cell',
-        clubTier: null,
-        agentType: null,
-        joinedDate: '2026-02-01',
-        status: 'Active'
-      },
-      // Level 3: Territory Sales Executives (TSE / TSC) - Reports to Sales Manager
-      {
-        id: 'tm-tse-201',
-        tenantId: 'tnt-101',
-        name: 'Rohan Deshmukh',
-        code: 'TSE-201',
-        role: 'TSE',
-        roleLabel: '🤝 Territory Sales Executive (TSE)',
-        reportsToId: 'tm-sm-101',
-        reportsToName: 'Vikram Malhotra (SM-101)',
-        email: 'rohan.tse@branchagency.internal',
-        phone: '+91 97410 44556',
-        vertical: 'Branch Agency Vertical',
-        territory: 'North City Territory',
-        clubTier: null,
-        agentType: null,
-        joinedDate: '2026-02-15',
-        status: 'Active'
-      },
-      {
-        id: 'tm-tse-202',
-        tenantId: 'tnt-101',
-        name: 'Kavita Rao',
-        code: 'TSE-202',
-        role: 'TSE',
-        roleLabel: '🤝 Territory Sales Executive (TSE)',
-        reportsToId: 'tm-sm-102',
-        reportsToName: 'Priya Sharma (SM-102)',
-        email: 'kavita.tse@branchagency.internal',
-        phone: '+91 98220 55667',
-        vertical: 'Digital Agency Vertical',
-        territory: 'Online Outreach Territory',
-        clubTier: null,
-        agentType: null,
-        joinedDate: '2026-03-01',
-        status: 'Active'
-      },
-      // Level 4: Insurance Agents (Advisors) - Linked to Reporting Managers
-      {
-        id: 'tm-ag-301',
-        tenantId: 'tnt-101',
-        name: 'Suresh Nair',
-        code: 'AG-301',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-tse-201',
-        reportsToName: 'Rohan Deshmukh (TSE-201)',
-        reportsToRole: 'TSE',
-        email: 'suresh.ag@branchagency.internal',
-        phone: '+91 98450 77889',
-        vertical: 'Branch Agency Vertical',
-        territory: 'North City Territory',
-        clubTier: 'Gold Club (26%)',
-        miniLakpati: 'Achieved',
-        joinedDate: '2026-03-10',
-        lastActiveDate: '2026-10-10',
-        lastBusinessAmount: 22000,
-        contestStatus: 'Qualified',
-        status: 'Active'
-      },
-      {
-        id: 'tm-ag-302',
-        tenantId: 'tnt-101',
-        name: 'Meera Patel',
-        code: 'AG-302',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-tse-201',
-        reportsToName: 'Rohan Deshmukh (TSE-201)',
-        reportsToRole: 'TSE',
-        email: 'meera.ag@branchagency.internal',
-        phone: '+91 98450 88990',
-        vertical: 'Branch Agency Vertical',
-        territory: 'North City Territory',
-        clubTier: 'Club OS (Outstation)',
-        miniLakpati: 'In Progress',
-        joinedDate: '2026-04-01',
-        lastActiveDate: '2026-10-12',
-        lastBusinessAmount: 28000,
-        contestStatus: 'In Progress',
-        status: 'Active'
-      },
-      {
-        id: 'tm-ag-303',
-        tenantId: 'tnt-101',
-        name: 'Rajesh Khurana',
-        code: 'AG-303',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-tse-202',
-        reportsToName: 'Kavita Rao (TSE-202)',
-        reportsToRole: 'TSE',
-        email: 'rajesh.ag@branchagency.internal',
-        phone: '+91 98110 99001',
-        vertical: 'Digital Agency Vertical',
-        territory: 'Online Outreach Territory',
-        clubTier: 'Bronze Club (18%)',
-        miniLakpati: 'Achieved',
-        joinedDate: '2026-04-15',
-        lastActiveDate: '2026-09-22',
-        lastBusinessAmount: 60000,
-        contestStatus: 'Goal Met',
-        status: 'Active'
-      },
-      {
-        id: 'tm-ag-304',
-        tenantId: 'tnt-101',
-        name: 'Ananya Verma',
-        code: 'AG-304',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-sm-101',
-        reportsToName: 'Vikram Malhotra (SM-101)',
-        reportsToRole: 'SALES_MANAGER',
-        email: 'ananya.ag@branchagency.internal',
-        phone: '+91 98330 11223',
-        vertical: 'Branch Agency Vertical',
-        territory: 'Central Metro Hub',
-        clubTier: 'Diamond Club (34%)',
-        miniLakpati: 'Not Started',
-        joinedDate: '2025-10-01',
-        lastActiveDate: '2026-02-10',
-        lastBusinessAmount: 110000,
-        contestStatus: 'Not Enrolled',
-        status: 'Inactive'
-      },
-      {
-        id: 'tm-ag-305',
-        tenantId: 'tnt-101',
-        name: 'Deepak Joshi',
-        code: 'AG-305',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-sm-102',
-        reportsToName: 'Priya Sharma (SM-102)',
-        reportsToRole: 'SALES_MANAGER',
-        email: 'deepak.ag@branchagency.internal',
-        phone: '+91 98450 66778',
-        vertical: 'Branch Agency Vertical',
-        territory: 'South City Territory',
-        clubTier: 'Silver Club (22%)',
-        miniLakpati: 'Achieved',
-        joinedDate: '2026-05-01',
-        lastActiveDate: '2026-10-06',
-        lastBusinessAmount: 45000,
-        contestStatus: 'Qualified',
-        status: 'Active'
-      },
-      // Agent Reporting Directly to Branch Manager (BM Direct)
-      {
-        id: 'tm-ag-306',
-        tenantId: 'tnt-101',
-        name: 'Pooja Hegde',
-        code: 'AG-306',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'bm-head',
-        reportsToName: 'Branch Manager',
-        reportsToRole: 'BRANCH_MANAGER',
-        email: 'pooja.ag@branchagency.internal',
-        phone: '+91 98450 44332',
-        vertical: 'Branch Agency Vertical',
-        territory: 'Central Metro Hub',
-        clubTier: 'Silver Club (22%)',
-        miniLakpati: 'Achieved',
-        joinedDate: '2026-06-01',
-        lastActiveDate: '2026-10-08',
-        lastBusinessAmount: 52000,
-        contestStatus: 'Qualified',
-        status: 'Active'
-      },
-      // Inactive Agent: Never Active (Joined but 0 business)
-      {
-        id: 'tm-ag-307',
-        tenantId: 'tnt-101',
-        name: 'Amit Saxena',
-        code: 'AG-307',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-sm-101',
-        reportsToName: 'Vikram Malhotra (SM-101)',
-        reportsToRole: 'SALES_MANAGER',
-        email: 'amit.ag@branchagency.internal',
-        phone: '+91 98111 22334',
-        vertical: 'Branch Agency Vertical',
-        territory: 'Central Metro Hub',
-        clubTier: 'Associate',
-        miniLakpati: 'Not Started',
-        joinedDate: '2026-09-01',
-        lastActiveDate: null,
-        lastBusinessAmount: 0,
-        contestStatus: 'Not Enrolled',
-        status: 'Active'
-      },
-      // Inactive Agent: Dormant (>1 Year Inactive)
-      {
-        id: 'tm-ag-308',
-        tenantId: 'tnt-101',
-        name: 'Neha Kulkarni',
-        code: 'AG-308',
-        role: 'AGENT',
-        roleLabel: '🌟 Insurance Advisor (Agent)',
-        reportsToId: 'tm-tse-202',
-        reportsToName: 'Kavita Rao (TSE-202)',
-        reportsToRole: 'TSE',
-        email: 'neha.ag@branchagency.internal',
-        phone: '+91 98222 33445',
-        vertical: 'Digital Agency Vertical',
-        territory: 'Online Outreach Territory',
-        clubTier: "Chairman's Elite (40%)",
-        miniLakpati: 'Not Started',
-        joinedDate: '2024-05-10',
-        lastActiveDate: '2025-08-15',
-        lastBusinessAmount: 180000,
-        contestStatus: 'Not Enrolled',
-        status: 'Inactive'
-      }
-    ];
+    const INITIAL_BRANCH_TEAM = [];
 
         // =========================================================================
     // AGENT ACTIVATION, DISTINCT ACTIVITY & INACTIVITY CALCULATION ENGINE
@@ -2429,7 +767,26 @@
       });
 
       // Active selected tenant for workspace view
-      const [selectedTenant, setSelectedTenant] = useState(INITIAL_TENANTS[0]);
+      const [selectedTenant, setSelectedTenant] = useState(() => {
+        try {
+          const saved = localStorage.getItem('bms_commercial_tenants_v1');
+          const tList = saved ? JSON.parse(saved) : INITIAL_TENANTS;
+          const sessionStr = localStorage.getItem('bms_auth_session_v3');
+          if (sessionStr) {
+            const session = JSON.parse(sessionStr);
+            const savedUsersStr = localStorage.getItem('bms_users_v5');
+            const userList = savedUsersStr ? JSON.parse(savedUsersStr) : INITIAL_USERS;
+            const foundUser = (userList || []).find(u => (u.userId.toLowerCase() === (session.userId || '').toLowerCase()) && u.status === 'Active');
+            if (foundUser && foundUser.tenantId) {
+              const matchedTenant = (tList || []).find(t => t.id === foundUser.tenantId);
+              if (matchedTenant) return matchedTenant;
+            }
+          }
+          return tList && tList.length > 0 ? tList[0] : null;
+        } catch(e) {
+          return null;
+        }
+      });
 
       // Tenant Operational data
       // Tenant Operational data with initial seed merge
@@ -3628,13 +1985,15 @@
 
       // Modals
       const [showOnboardModal, setShowOnboardModal] = useState(false);
+      const [newlyOnboardedCredentials, setNewlyOnboardedCredentials] = useState(null);
+      const [copiedCreds, setCopiedCreds] = useState(false);
       const [showEditTenantModal, setShowEditTenantModal] = useState(false);
       const [editingTenant, setEditingTenant] = useState(null);
       const [showDeleteTenantModal, setShowDeleteTenantModal] = useState(false);
       const [tenantToDelete, setTenantToDelete] = useState(null);
       const [showRechargeModal, setShowRechargeModal] = useState(false);
       const [rechargeForm, setRechargeForm] = useState({
-        tenantId: INITIAL_TENANTS[0].id,
+        tenantId: '',
         planId: 'pkg-quarterly',
         paymentMethod: 'UPI AutoPay'
       });
@@ -3655,7 +2014,10 @@
         phone: '',
         email: '',
         rentedPlanId: 'pkg-quarterly',
-        paymentMethod: 'UPI AutoPay'
+        paymentMethod: 'UPI AutoPay',
+        bmUserId: '',
+        bmPassword: 'Pass@' + Math.floor(1000 + Math.random() * 9000),
+        showBmPassword: true
       });
 
       // Auto-save LocalStorage
@@ -3756,18 +2118,10 @@
       const totalRevenue = useMemo(() => recharges.reduce((acc, r) => acc + r.amount, 0), [recharges]);
       const activeTenantsCount = useMemo(() => tenants.filter(t => t.status === 'Active Rental').length, [tenants]);
 
-      // Active team for the currently selected tenant branch
+      // Active team for the currently selected tenant branch - STRICT MULTI-TENANT ISOLATION
       const currentTenantTeam = useMemo(() => {
-        if (!selectedTenant) return branchTeam;
-        const tenantMembers = branchTeam.filter(m => m.tenantId === selectedTenant.id);
-        if (tenantMembers.length > 0) return tenantMembers;
-        
-        // Return baseline template with this tenant's contactPerson as Head
-        return INITIAL_BRANCH_TEAM.map(m => ({
-          ...m,
-          tenantId: selectedTenant.id,
-          reportsToName: m.reportsToId === 'bm-head' ? `${selectedTenant.contactPerson} (Branch Manager)` : m.reportsToName
-        }));
+        if (!selectedTenant) return [];
+        return branchTeam.filter(m => m.tenantId === selectedTenant.id && m.status !== 'Deleted');
       }, [branchTeam, selectedTenant]);
 
       // Agent 8-Filter predicate function
@@ -3880,7 +2234,7 @@
       const filteredMasterProducts = useMemo(() => {
         return products.filter(prod => {
           if (viewMode === 'TENANT_WORKSPACE') {
-            if (prod.scope !== 'CENTRAL' && prod.branchId !== selectedTenant.id) return false;
+            if (prod.scope !== 'CENTRAL' && (!selectedTenant || prod.branchId !== selectedTenant.id)) return false;
           } else {
             if (masterBranchFilter !== 'ALL' && prod.branchId !== masterBranchFilter && prod.scope !== 'CENTRAL') return false;
           }
@@ -3918,7 +2272,7 @@
       const filteredMasterClubs = useMemo(() => {
         return agentClubs.filter(club => {
           if (viewMode === 'TENANT_WORKSPACE') {
-            if (club.scope !== 'CENTRAL' && club.branchId !== selectedTenant.id) return false;
+            if (club.scope !== 'CENTRAL' && (!selectedTenant || club.branchId !== selectedTenant.id)) return false;
           } else {
             if (masterBranchFilter !== 'ALL' && club.branchId !== masterBranchFilter && club.scope !== 'CENTRAL') return false;
           }
@@ -3938,7 +2292,7 @@
       const filteredMasterContests = useMemo(() => {
         return contests.filter(cnt => {
           if (viewMode === 'TENANT_WORKSPACE') {
-            if (cnt.scope !== 'CENTRAL' && cnt.branchId !== selectedTenant.id) return false;
+            if (cnt.scope !== 'CENTRAL' && (!selectedTenant || cnt.branchId !== selectedTenant.id)) return false;
           } else {
             if (masterBranchFilter !== 'ALL' && cnt.branchId !== masterBranchFilter && cnt.scope !== 'CENTRAL') return false;
           }
@@ -4152,20 +2506,9 @@
           status: 'Active'
         };
 
-        let baseList = [...branchTeam];
-        const existsForTenant = baseList.some(m => m.tenantId === selectedTenant.id);
-        if (!existsForTenant) {
-          const defaults = INITIAL_BRANCH_TEAM.map(m => ({
-            ...m,
-            tenantId: selectedTenant.id,
-            reportsToName: m.reportsToId === 'bm-head' ? `${selectedTenant.contactPerson} (Branch Manager)` : m.reportsToName
-          }));
-          baseList = [...defaults, ...baseList];
-        }
-
-        const updated = [newMem, ...baseList];
+        const updated = [newMem, ...branchTeam];
         setBranchTeam(updated);
-        try { localStorage.setItem('bms_branch_team_v2', JSON.stringify(updated)); } catch (err) {}
+        try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(updated)); } catch (err) {}
 
         setShowCreateMemberModal(false);
         showToast(`✓ Added ${newMem.name} (${newMem.code}) as ${newMem.roleLabel}!`, 'success');
@@ -4320,7 +2663,7 @@
         setAgentToTransfer(agent);
         setTransferRemarks('');
         const availableManagers = [
-          { id: 'bm-head', name: `${selectedTenant.contactPerson} (Branch Manager)`, role: 'BRANCH_MANAGER', roleLabel: '🏢 Direct to Branch Head' },
+          { id: 'bm-head', name: selectedTenant ? `${selectedTenant.contactPerson} (Branch Manager)` : 'Branch Manager', role: 'BRANCH_MANAGER', roleLabel: '🏢 Direct to Branch Head' },
           ...currentTenantTeam.filter(m => m.role === 'TSE' && m.status !== 'Deleted').map(t => ({ id: t.id, name: `${t.name} (${t.code})`, role: 'TSE', roleLabel: '🤝 TSC Leader' })),
           ...currentTenantTeam.filter(m => m.role === 'SALES_MANAGER' && m.status !== 'Deleted').map(sm => ({ id: sm.id, name: `${sm.name} (${sm.code})`, role: 'SALES_MANAGER', roleLabel: '👔 FLS Manager' }))
         ].filter(m => m.id !== agent.reportsToId);
@@ -4341,7 +2684,7 @@
         let targetVertical = agentToTransfer.vertical;
 
         if (transferTargetManagerId === 'bm-head') {
-          targetManagerName = `${selectedTenant.contactPerson} (Branch Manager)`;
+          targetManagerName = selectedTenant ? `${selectedTenant.contactPerson} (Branch Manager)` : 'Branch Manager';
           targetManagerRole = 'BRANCH_MANAGER';
         } else {
           const targetMgr = currentTenantTeam.find(m => m.id === transferTargetManagerId);
@@ -4510,18 +2853,9 @@
         const mem = currentTenantTeam.find(m => m.id === id);
         if (!mem) return;
         if (confirm(`Remove ${mem.name} (${mem.code}) from branch team hierarchy?`)) {
-          let baseList = [...branchTeam];
-          const existsForTenant = baseList.some(m => m.tenantId === selectedTenant.id);
-          if (!existsForTenant) {
-            baseList = INITIAL_BRANCH_TEAM.map(m => ({
-              ...m,
-              tenantId: selectedTenant.id,
-              reportsToName: m.reportsToId === 'bm-head' ? `${selectedTenant.contactPerson} (Branch Manager)` : m.reportsToName
-            }));
-          }
-          const updated = baseList.filter(m => m.id !== id);
+          const updated = branchTeam.filter(m => m.id !== id);
           setBranchTeam(updated);
-          try { localStorage.setItem('bms_branch_team_v2', JSON.stringify(updated)); } catch (err) {}
+          try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(updated)); } catch (err) {}
           showToast(`Removed ${mem.name} from branch roster.`, 'info');
         }
       };
@@ -5206,53 +3540,54 @@
             return;
           }
 
-          // Check if password change is forced
+          // If mustChangePassword was set from an admin reset, auto-clear it so login is never blocked
+          let userToLogin = target;
           if (target.mustChangePassword) {
-            setIsLoggingIn(false);
-            setCurrentUser(target);
-            showToast('Please update your initial temporary password.', 'info');
-            return;
+            userToLogin = { ...target, mustChangePassword: false };
+            const updatedUsers = users.map(u => u.id === target.id ? { ...u, mustChangePassword: false } : u);
+            setUsers(updatedUsers);
+            try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch(e) {}
           }
 
           // Complete login
           const sessionObj = {
-            userId: target.userId,
-            token: 'bms_token_' + Date.now() + '_' + target.id,
+            userId: userToLogin.userId,
+            token: 'bms_token_' + Date.now() + '_' + userToLogin.id,
             timestamp: Date.now()
           };
           try {
             localStorage.setItem('bms_auth_session_v3', JSON.stringify(sessionObj));
           } catch(err) {}
 
-          setCurrentUser(target);
+          setCurrentUser(userToLogin);
           setIsLoggedIn(true);
           setIsLoggingIn(false);
-          logAuditEvent('LOGIN_SUCCESS', target.userId, `Logged in with role: ${target.role}`);
+          logAuditEvent('LOGIN_SUCCESS', userToLogin.userId, `Logged in with role: ${userToLogin.role}`);
 
           // Set active tenant if branch user
-          if (target.tenantId) {
-            const matchTenant = tenants.find(t => t.id === target.tenantId) || tenants[0];
+          if (userToLogin.tenantId) {
+            const matchTenant = tenants.find(t => t.id === userToLogin.tenantId) || tenants[0];
             setSelectedTenant(matchTenant);
           }
 
           // Role-based routing
-          if (target.role === 'SUPER_ADMIN') {
+          if (userToLogin.role === 'SUPER_ADMIN') {
             setViewMode('SUPER_ADMIN');
             setActiveTab('tenants');
-          } else if (target.role === 'BRANCH_MANAGER') {
+          } else if (userToLogin.role === 'BRANCH_MANAGER') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('tenant_dashboard');
-          } else if (target.role === 'SALES_MANAGER') {
+          } else if (userToLogin.role === 'SALES_MANAGER') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('fls_dashboard');
-          } else if (target.role === 'TSE') {
+          } else if (userToLogin.role === 'TSE') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('tse_dashboard');
-          } else if (target.role === 'AGENT') {
+          } else if (userToLogin.role === 'AGENT') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('agent_dashboard');
           }
-          showToast(`Welcome back, ${target.name}!`);
+          showToast(`Welcome back, ${userToLogin.name}!`);
         }, 200);
       };
 
@@ -5536,7 +3871,7 @@
               ...u,
               salt: newSalt,
               passwordHash: newHash,
-              mustChangePassword: true
+              mustChangePassword: false
             };
           }
           return u;
@@ -5592,31 +3927,83 @@
 
       
 
-      // Handle Onboard Commercial Rental Client
+      // Handle Onboard Commercial Rental Client & Auto-Provision Branch Manager
       const handleOnboardTenant = (e) => {
         e.preventDefault();
+        const compName = (onboardForm.companyName || '').trim();
+        const branchLoc = (onboardForm.branchLocation || '').trim();
+        const contactPerson = (onboardForm.contactPerson || '').trim();
+        const rawBmUserId = (onboardForm.bmUserId || '').trim().toLowerCase();
+        const bmPassword = (onboardForm.bmPassword || '').trim();
+
+        if (!compName || !branchLoc || !contactPerson) {
+          showToast('Please fill in Company Name, Branch Location, and Contact Person!', 'error');
+          return;
+        }
+
+        // Validate Branch Manager User ID
+        const finalBmUserId = rawBmUserId || `bm_${contactPerson.toLowerCase().replace(/[^a-z0-9]/g, '') || Date.now().toString().slice(-4)}`;
+        if (users.some(u => u.userId.toLowerCase() === finalBmUserId.toLowerCase())) {
+          showToast(`User ID "${finalBmUserId}" already exists! Please choose another User ID for this Branch Manager.`, 'error');
+          return;
+        }
+
+        const finalBmPassword = bmPassword.length >= 4 ? bmPassword : ('Pass@' + Math.floor(1000 + Math.random() * 9000));
+
         const pkg = BMS_PACKAGES.find(p => p.id === onboardForm.rentedPlanId) || BMS_PACKAGES[1];
         const now = new Date();
         const expDate = new Date();
         expDate.setDate(now.getDate() + pkg.durationDays);
 
+        const newTenantId = `tnt-${Date.now()}`;
+
+        // 1. Create Tenant Record with mapped Branch Manager User ID
         const newTenant = {
-          id: `tnt-${Date.now()}`,
-          companyName: onboardForm.companyName,
-          branchLocation: onboardForm.branchLocation,
-          contactPerson: onboardForm.contactPerson,
+          id: newTenantId,
+          companyName: compName,
+          branchLocation: branchLoc,
+          contactPerson: contactPerson,
           role: 'Branch Manager',
-          email: onboardForm.email || `${onboardForm.contactPerson.toLowerCase().replace(/\s+/g, '.')}@clientagency.com`,
-          phone: onboardForm.phone || '+91 98000 11223',
+          email: onboardForm.email ? onboardForm.email.trim() : `${finalBmUserId}@clientagency.com`,
+          phone: onboardForm.phone ? onboardForm.phone.trim() : '+91 98000 11223',
           rentedPlan: pkg.name,
           cycle: pkg.cycle,
           rentalFee: pkg.price,
           validFrom: now.toISOString().split('T')[0],
           validUntil: expDate.toISOString().split('T')[0],
           status: 'Active Rental',
-          totalPaid: pkg.price
+          totalPaid: pkg.price,
+          mappedUserId: finalBmUserId
         };
 
+        // 2. Cryptographic Salt & SHA-256 Hash for Branch Manager User
+        const bmSalt = generateSalt();
+        const bmPasswordHash = hashPassword(finalBmPassword, bmSalt);
+
+        // 3. Create Branch Manager User Account in users repository
+        const newBmUser = {
+          id: `usr-bm-${Date.now()}`,
+          userId: finalBmUserId,
+          name: contactPerson,
+          employeeId: `BM-${Date.now().toString().slice(-4)}`,
+          role: 'BRANCH_MANAGER',
+          roleLabel: '🏢 Branch Manager',
+          branchLocation: branchLoc,
+          tenantId: newTenantId,
+          organization: compName,
+          vertical: 'Branch Agency Vertical',
+          reportsToId: null,
+          reportsToName: 'Corporate Management',
+          phone: newTenant.phone,
+          email: newTenant.email,
+          status: 'Active',
+          mustChangePassword: false,
+          salt: bmSalt,
+          passwordHash: bmPasswordHash,
+          createdAt: now.toISOString().split('T')[0]
+        };
+
+        // 4. Initial Commercial Invoice
         const newInvoice = {
           id: `rec-${Date.now()}`,
           invoiceNo: `INV-2026-${Date.now().toString().slice(-4)}`,
@@ -5632,10 +4019,51 @@
           status: 'Paid & Active'
         };
 
-        setTenants([newTenant, ...tenants]);
-        setRecharges([newInvoice, ...recharges]);
+        // 5. Update States and LocalStorage
+        const updatedTenants = [newTenant, ...tenants];
+        setTenants(updatedTenants);
+        try { localStorage.setItem('bms_commercial_tenants_v1', JSON.stringify(updatedTenants)); } catch(e) {}
+
+        const updatedUsers = [newBmUser, ...users];
+        setUsers(updatedUsers);
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch(e) {}
+
+        const updatedRecharges = [newInvoice, ...recharges];
+        setRecharges(updatedRecharges);
+        try { localStorage.setItem('bms_commercial_recharges_v1', JSON.stringify(updatedRecharges)); } catch(e) {}
+
+        setSelectedTenant(newTenant);
+
+        logAuditEvent('TENANT_ONBOARDED', currentUser ? currentUser.userId : 'admin', `Onboarded "${compName}" (${branchLoc}) with Branch Manager @${finalBmUserId}`);
+        logAuditEvent('USER_CREATED', currentUser ? currentUser.userId : 'admin', `Auto-provisioned Branch Manager @${finalBmUserId} for ${compName}`);
+
+        // Surface copyable credentials modal
+        setNewlyOnboardedCredentials({
+          companyName: compName,
+          branchLocation: branchLoc,
+          bmName: contactPerson,
+          bmUserId: finalBmUserId,
+          bmPassword: finalBmPassword,
+          planName: pkg.name,
+          rentalFee: pkg.price
+        });
+
+        // Reset onboardForm with fresh auto-generated password
+        setOnboardForm({
+          companyName: '',
+          branchLocation: '',
+          contactPerson: '',
+          phone: '',
+          email: '',
+          rentedPlanId: 'pkg-quarterly',
+          paymentMethod: 'UPI AutoPay',
+          bmUserId: '',
+          bmPassword: 'Pass@' + Math.floor(1000 + Math.random() * 9000),
+          showBmPassword: true
+        });
+
         setShowOnboardModal(false);
-        showToast(`Tenant "${newTenant.companyName}" onboarded with ${pkg.name}!`);
+        showToast(`✓ Company "${compName}" onboarded! Branch Manager @${finalBmUserId} provisioned.`, 'success');
       };
 
       // Open Edit Tenant Modal
@@ -5714,22 +4142,30 @@
       // Confirm Delete Tenant
       const handleConfirmDeleteTenant = () => {
         if (!tenantToDelete) return;
-        if (tenants.length <= 1) {
-          showToast('Cannot delete the only remaining company! Please onboard another company first.', 'error');
-          setShowDeleteTenantModal(false);
-          return;
-        }
 
-        const updatedTenants = tenants.filter(t => t.id !== tenantToDelete.id);
+        const targetId = tenantToDelete.id;
+        const targetName = tenantToDelete.companyName;
+
+        const updatedTenants = tenants.filter(t => t.id !== targetId);
         setTenants(updatedTenants);
         try { localStorage.setItem('bms_commercial_tenants_v1', JSON.stringify(updatedTenants)); } catch(e) {}
 
-        if (selectedTenant && selectedTenant.id === tenantToDelete.id) {
-          setSelectedTenant(updatedTenants[0]);
+        if (selectedTenant && selectedTenant.id === targetId) {
+          setSelectedTenant(updatedTenants.length > 0 ? updatedTenants[0] : null);
         }
 
-        logAuditEvent('TENANT_DELETED', currentUser ? currentUser.userId : 'admin', `Deleted company "${tenantToDelete.companyName}" (${tenantToDelete.id})`);
-        showToast(`✓ Company "${tenantToDelete.companyName}" deleted successfully!`, 'info');
+        // Clean up any users mapped to this tenant
+        const updatedUsers = users.filter(u => u.tenantId !== targetId);
+        setUsers(updatedUsers);
+        try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch(e) {}
+
+        // Clean up any branch team members mapped to this tenant
+        const updatedTeam = branchTeam.filter(m => m.tenantId !== targetId);
+        setBranchTeam(updatedTeam);
+        try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(updatedTeam)); } catch(e) {}
+
+        logAuditEvent('TENANT_DELETED', currentUser ? currentUser.userId : 'admin', `Deleted company "${targetName}" (${targetId}) and purged associated branch records`);
+        showToast(`✓ Company "${targetName}" deleted successfully!`, 'info');
         setShowDeleteTenantModal(false);
         setTenantToDelete(null);
       };
@@ -5738,18 +4174,12 @@
       const handlePurgeDemoTenants = () => {
         const demoIds = ['tnt-101', 'tnt-102', 'tnt-103'];
         const remaining = tenants.filter(t => !demoIds.includes(t.id) && !t.id.startsWith('tnt-sim-'));
-        if (remaining.length === 0) {
-          showToast('Cannot purge all companies: please ensure at least one real company exists before purging.', 'error');
-          return;
-        }
-        if (confirm(`Purge demo companies (${tenants.length - remaining.length} demo records)? Only real company records will remain.`)) {
+        if (confirm(`Purge demo companies (${tenants.length - remaining.length} demo records)?`)) {
           setTenants(remaining);
           try { localStorage.setItem('bms_commercial_tenants_v1', JSON.stringify(remaining)); } catch(e) {}
-          if (selectedTenant && (demoIds.includes(selectedTenant.id) || selectedTenant.id.startsWith('tnt-sim-'))) {
-            setSelectedTenant(remaining[0]);
-          }
-          logAuditEvent('DEMO_TENANTS_PURGED', currentUser ? currentUser.userId : 'admin', 'Purged all demo tenant companies');
-          showToast(`✓ Demo companies purged! ${remaining.length} company active.`, 'success');
+          setSelectedTenant(remaining.length > 0 ? remaining[0] : null);
+          logAuditEvent('DEMO_TENANTS_PURGED', currentUser ? currentUser.userId : 'admin', 'Purged demo tenant companies');
+          showToast(`✓ Demo companies purged!`, 'success');
         }
       };
 
@@ -6139,7 +4569,7 @@
                   </div>
                   <div className="truncate">
                     <h1 className="font-extrabold text-white text-xs tracking-tight truncate leading-tight">
-                      {viewMode === 'SUPER_ADMIN' ? 'Click to Connect Admin' : selectedTenant.branchLocation}
+                      {viewMode === 'SUPER_ADMIN' ? 'Click to Connect Admin' : (selectedTenant ? selectedTenant.branchLocation : 'Commercial Workspace')}
                     </h1>
                     <span className="text-[9px] uppercase font-bold text-indigo-400 block tracking-wider truncate">
                       {viewMode === 'SUPER_ADMIN' ? 'Commercial Landlord' : 'Branch Manager Portal'}
@@ -6231,8 +4661,10 @@
                     } else if (currentUser?.role === 'AGENT') {
                       navigateTo('TENANT_WORKSPACE', 'agent_dashboard');
                     } else {
-                      const bmTenant = tenants[0] || INITIAL_TENANTS[0];
-                      setSelectedTenant(bmTenant);
+                      const bmTenant = (currentUser && currentUser.tenantId)
+                        ? (tenants.find(t => t.id === currentUser.tenantId) || selectedTenant || tenants[0] || null)
+                        : (selectedTenant || tenants[0] || null);
+                      if (bmTenant) setSelectedTenant(bmTenant);
                       navigateTo('TENANT_WORKSPACE', 'tenant_dashboard');
                     }
                   }}
@@ -6565,12 +4997,12 @@
               <div className="flex items-center space-x-2.5 min-w-0">
                 <span className="text-xs font-black text-white uppercase tracking-wider truncate flex items-center space-x-1.5">
                   <span className="text-purple-400">🏢</span>
-                  <span className="truncate">{viewMode === 'SUPER_ADMIN' ? 'Commercial Landlord' : selectedTenant.branchLocation}</span>
+                  <span className="truncate">{viewMode === 'SUPER_ADMIN' ? 'Commercial Landlord' : (selectedTenant ? selectedTenant.branchLocation : 'No Branch Selected')}</span>
                 </span>
                 <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-semibold border border-slate-700">
-                  {viewMode === 'SUPER_ADMIN' ? 'SUPER ADMIN' : selectedTenant.companyName || 'MANIPALCIGNA'}
+                  {viewMode === 'SUPER_ADMIN' ? 'SUPER ADMIN' : (selectedTenant ? (selectedTenant.companyName || 'Click to Connect') : 'BMS Portal')}
                 </span>
-                {viewMode === 'TENANT_WORKSPACE' && (
+                {viewMode === 'TENANT_WORKSPACE' && selectedTenant && (
                   <span className="hidden md:inline-block px-1.5 py-0.5 rounded text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 font-mono">
                     BM: {selectedTenant.contactPerson}
                   </span>
@@ -6814,68 +5246,126 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {filteredTenants.map(t => (
-                          <tr key={t.id} className="hover:bg-slate-800/40">
-                            <td className="p-3">
-                              <strong className="text-white block font-bold">{t.companyName}</strong>
-                              <span className="text-[10px] text-slate-500 font-mono">ID: {t.id}</span>
-                            </td>
-                            <td className="p-3 font-semibold text-slate-200">{t.branchLocation}</td>
-                            <td className="p-3">
-                              <span className="text-slate-200 block font-semibold">{t.contactPerson}</span>
-                              <span className="text-[10px] text-slate-400 block">{t.phone}</span>
-                            </td>
-                            <td className="p-3">
-                              <span className="text-indigo-400 font-bold block">{t.rentedPlan}</span>
-                              <span className="text-[10px] text-slate-500">₹{t.rentalFee.toLocaleString()} / {t.cycle}</span>
-                            </td>
-                            <td className="p-3 font-mono text-slate-300">{t.validUntil}</td>
-                            <td className="p-3 font-bold text-emerald-400">₹{t.totalPaid.toLocaleString()}</td>
-                            <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                t.status === 'Active Rental'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-rose-500/20 text-rose-300'
-                              }`}>
-                                {t.status}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex items-center space-x-1.5 whitespace-nowrap">
+                        {filteredTenants.length === 0 ? (
+                          <tr>
+                            <td colSpan="8" className="p-8 text-center text-slate-400">
+                              <div className="flex flex-col items-center justify-center space-y-3">
+                                <span className="text-3xl">🏢</span>
+                                <p className="font-semibold text-slate-200 text-sm">No Companies Onboarded Yet</p>
+                                <p className="text-xs text-slate-400 max-w-md">
+                                  Click "+ Onboard Commercial Rental Client" to create your first company. You can define their dedicated Branch Manager User ID and initial password on onboarding.
+                                </p>
                                 <button
-                                  onClick={() => handleOpenEditTenant(t)}
-                                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 font-bold flex items-center space-x-1 transition-colors"
-                                  title={`Edit ${t.companyName} details`}
+                                  type="button"
+                                  onClick={() => setShowOnboardModal(true)}
+                                  className="mt-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold text-xs shadow-lg transition-transform active:scale-95"
                                 >
-                                  <span>✏️</span>
-                                  <span>Edit</span>
-                                </button>
-                                <button
-                                  onClick={() => handleOpenDeleteTenant(t)}
-                                  className="px-2.5 py-1 text-xs bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 rounded-lg border border-rose-800/50 font-bold flex items-center space-x-1 transition-colors"
-                                  title={`Delete ${t.companyName}`}
-                                >
-                                  <span>🗑️</span>
-                                  <span>Delete</span>
-                                </button>
-                                <button
-                                  onClick={() => handleOpenRechargeModal(t)}
-                                  className="btn-recharge text-xs py-1 px-2.5"
-                                  title={`Recharge / Renew rental license for ${t.branchLocation}`}
-                                >
-                                  <span>⚡</span>
-                                  <span>Recharge</span>
-                                </button>
-                                <button
-                                  onClick={() => openTenantWorkspace(t)}
-                                  className="px-2.5 py-1 text-xs bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-lg border border-indigo-500/30 font-bold transition-colors"
-                                >
-                                  Open Portal →
+                                  + Onboard First Company
                                 </button>
                               </div>
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredTenants.map(t => (
+                            <tr key={t.id} className="hover:bg-slate-800/40">
+                              <td className="p-3">
+                                <strong className="text-white block font-bold">{t.companyName}</strong>
+                                <span className="text-[10px] text-slate-500 font-mono">ID: {t.id}</span>
+                              </td>
+                              <td className="p-3 font-semibold text-slate-200">{t.branchLocation}</td>
+                              <td className="p-3">
+                                <span className="text-slate-200 block font-semibold">{t.contactPerson}</span>
+                                <span className="text-[10px] text-slate-400 block">{t.phone}</span>
+                                {t.mappedUserId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const u = users.find(usr => usr.userId === t.mappedUserId || usr.tenantId === t.id);
+                                      if (u) {
+                                        setTargetUserForReset(u);
+                                        setNewResetPassword('Pass@' + Math.floor(1000 + Math.random() * 9000));
+                                        setShowResetUserPasswordModal(true);
+                                      } else {
+                                        showToast(`User @${t.mappedUserId} not found in database.`, 'info');
+                                      }
+                                    }}
+                                    className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-800/50 hover:border-indigo-600 px-1.5 py-0.5 rounded inline-flex items-center space-x-1 mt-0.5 transition-colors cursor-pointer"
+                                    title="Click to view or reset Branch Manager credentials"
+                                  >
+                                    <span>👤 @{t.mappedUserId}</span>
+                                    <span className="text-[9px] text-amber-300 font-sans">🔑</span>
+                                  </button>
+                                )}
+                              </td>
+                              <td className="p-3">
+                                <span className="text-indigo-400 font-bold block">{t.rentedPlan}</span>
+                                <span className="text-[10px] text-slate-500">₹{t.rentalFee.toLocaleString()} / {t.cycle}</span>
+                              </td>
+                              <td className="p-3 font-mono text-slate-300">{t.validUntil}</td>
+                              <td className="p-3 font-bold text-emerald-400">₹{t.totalPaid.toLocaleString()}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  t.status === 'Active Rental'
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-rose-500/20 text-rose-300'
+                                }`}>
+                                  {t.status}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center space-x-1.5 whitespace-nowrap">
+                                  <button
+                                    onClick={() => {
+                                      const u = users.find(usr => usr.userId === t.mappedUserId || usr.tenantId === t.id);
+                                      if (u) {
+                                        setTargetUserForReset(u);
+                                        setNewResetPassword('Pass@' + Math.floor(1000 + Math.random() * 9000));
+                                        setShowResetUserPasswordModal(true);
+                                      } else {
+                                        showToast(`User account for ${t.companyName} not found. You can create one in User Management.`, 'warning');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 text-xs bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 hover:text-amber-100 rounded-lg border border-amber-800/50 font-bold flex items-center space-x-1 transition-colors"
+                                    title={`View or reset credentials for Branch Manager (@${t.mappedUserId || 'Manager'})`}
+                                  >
+                                    <span>🔑</span>
+                                    <span>Creds</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenEditTenant(t)}
+                                    className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 font-bold flex items-center space-x-1 transition-colors"
+                                    title={`Edit ${t.companyName} details`}
+                                  >
+                                    <span>✏️</span>
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenDeleteTenant(t)}
+                                    className="px-2.5 py-1 text-xs bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 rounded-lg border border-rose-800/50 font-bold flex items-center space-x-1 transition-colors"
+                                    title={`Delete ${t.companyName}`}
+                                  >
+                                    <span>🗑️</span>
+                                    <span>Delete</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRechargeModal(t)}
+                                    className="btn-recharge text-xs py-1 px-2.5"
+                                    title={`Recharge / Renew rental license for ${t.branchLocation}`}
+                                  >
+                                    <span>⚡</span>
+                                    <span>Recharge</span>
+                                  </button>
+                                  <button
+                                    onClick={() => openTenantWorkspace(t)}
+                                    className="px-2.5 py-1 text-xs bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-lg border border-indigo-500/30 font-bold transition-colors"
+                                  >
+                                    Open Portal →
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7053,17 +5543,17 @@
                         Insurance Agency Management SaaS
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono">
-                        {selectedTenant.companyName || 'ManipalCigna'} • Branch Code: THD-701
+                        {selectedTenant ? (selectedTenant.companyName || 'ManipalCigna') : 'Click to Connect'}
                       </span>
                     </div>
                     <h2 className="text-xl font-black text-white mt-1 flex items-center space-x-2">
-                      <span>{selectedTenant.branchLocation}</span>
+                      <span>{selectedTenant ? selectedTenant.branchLocation : 'No Branch Selected'}</span>
                       <span className="text-xs px-2 py-0.5 bg-emerald-950/60 text-emerald-400 rounded-full border border-emerald-800/40 font-normal">
                         Active Branch
                       </span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Branch Manager: <strong className="text-slate-200">{selectedTenant.contactPerson}</strong> • Volume Attribution: <span className="text-purple-400 font-bold">100% Full Attribution</span>
+                      Branch Manager: <strong className="text-slate-200">{selectedTenant ? selectedTenant.contactPerson : 'Not Assigned'}</strong> • Volume Attribution: <span className="text-purple-400 font-bold">100% Full Attribution</span>
                     </p>
                   </div>
 
@@ -8542,10 +7032,10 @@
                         </span>
                       </div>
                       <h2 className="text-lg font-black text-white mt-1">
-                        {selectedTenant.branchLocation} — Direct Reportees Console
+                        {selectedTenant ? selectedTenant.branchLocation : 'No Branch Selected'} — Direct Reportees Console
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        Branch Head: <strong className="text-slate-200">{selectedTenant.contactPerson}</strong> • Direct Leaders: <strong className="text-purple-400">{flsList.length + tseList.length} Direct Reportees</strong> ({flsList.length} FLS Managers, {tseList.length} TSC Leaders)
+                        Branch Head: <strong className="text-slate-200">{selectedTenant ? selectedTenant.contactPerson : 'Not Assigned'}</strong> • Direct Leaders: <strong className="text-purple-400">{flsList.length + tseList.length} Direct Reportees</strong> ({flsList.length} FLS Managers, {tseList.length} TSC Leaders)
                       </p>
                     </div>
 
@@ -9399,8 +7889,8 @@
                   {/* Level 1: Branch Head */}
                   <div className="bg-gradient-to-r from-purple-900/80 to-slate-900 border-2 border-purple-500/50 p-4 rounded-2xl text-center shadow-lg w-72">
                     <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block">Level 1: Branch Head</span>
-                    <h4 className="text-base font-black text-white mt-1">{selectedTenant.contactPerson}</h4>
-                    <span className="text-xs text-slate-300">{selectedTenant.companyName}</span>
+                    <h4 className="text-base font-black text-white mt-1">{selectedTenant ? selectedTenant.contactPerson : 'Branch Head'}</h4>
+                    <span className="text-xs text-slate-300">{selectedTenant ? selectedTenant.companyName : ''}</span>
                     <span className="mt-1 block text-[10px] bg-purple-500/20 text-purple-300 rounded font-mono font-bold py-0.5">100% Attribution</span>
                   </div>
 
@@ -10273,8 +8763,8 @@
                   if (!messageInput.trim()) return;
                   const newM = {
                     id: `msg-${Date.now()}`,
-                    senderName: selectedTenant.contactPerson,
-                    senderRole: selectedTenant.role,
+                    senderName: currentUser ? currentUser.name : (selectedTenant ? selectedTenant.contactPerson : 'Branch Manager'),
+                    senderRole: currentUser ? currentUser.roleLabel : (selectedTenant ? selectedTenant.role : 'Branch Manager'),
                     timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
                     text: messageInput.trim()
                   };
@@ -12709,15 +11199,182 @@
                     </div>
                   </div>
 
+                  {/* BRANCH MANAGER LOGIN CREDENTIALS SECTION */}
+                  <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900/90 border border-indigo-700/50 rounded-xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm">🔐</span>
+                        <h4 className="font-bold text-white text-xs">Branch Manager Portal Login Credentials</h4>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-mono font-bold">
+                        Role: BRANCH_MANAGER
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Provision credentials for this Branch Manager. Only this Branch Manager will be able to log in to this dedicated portal with zero cross-tenant visibility.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold text-[11px]">
+                          Login User ID <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={onboardForm.bmUserId}
+                          onChange={(e) => setOnboardForm({ ...onboardForm, bmUserId: e.target.value.toLowerCase().trim() })}
+                          className="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-2.5 text-white font-mono text-xs"
+                          placeholder="e.g. bm_delhi or rajesh.k"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-slate-400 font-semibold text-[11px]">
+                            Initial Password <span className="text-rose-400">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rnd = 'Pass@' + Math.floor(1000 + Math.random() * 9000);
+                              setOnboardForm({ ...onboardForm, bmPassword: rnd });
+                            }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
+                          >
+                            ⚡ Auto-Generate
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={onboardForm.showBmPassword ? 'text' : 'password'}
+                            required
+                            value={onboardForm.bmPassword}
+                            onChange={(e) => setOnboardForm({ ...onboardForm, bmPassword: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-2.5 pr-9 text-white font-mono text-xs"
+                            placeholder="Min. 4 characters"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setOnboardForm({ ...onboardForm, showBmPassword: !onboardForm.showBmPassword })}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                          >
+                            {onboardForm.showBmPassword ? '👁️' : '🙈'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end space-x-2 pt-3">
                     <button type="button" onClick={() => setShowOnboardModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold">
                       Cancel
                     </button>
-                    <button type="submit" className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">
+                    <button type="submit" className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md">
                       Onboard & Issue Rental License
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: 🎉 NEWLY ONBOARDED BRANCH MANAGER CREDENTIALS (COPYABLE) */}
+          {newlyOnboardedCredentials && (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+              <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-md w-full p-6 text-xs text-slate-200 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-2 text-emerald-400">
+                    <span className="text-2xl">🎉</span>
+                    <div>
+                      <h3 className="font-bold text-white text-sm">Company Onboarded Successfully!</h3>
+                      <p className="text-[10px] text-slate-400">Branch Manager portal credentials provisioned</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setNewlyOnboardedCredentials(null);
+                      setCopiedCreds(false);
+                    }}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Company:</span>
+                      <strong className="text-white text-xs">{newlyOnboardedCredentials.companyName}</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Branch Location:</span>
+                      <strong className="text-slate-200">{newlyOnboardedCredentials.branchLocation}</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Branch Manager:</span>
+                      <strong className="text-slate-200">{newlyOnboardedCredentials.bmName}</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Rented Package:</span>
+                      <span className="text-indigo-400 font-bold">{newlyOnboardedCredentials.planName}</span>
+                    </div>
+                  </div>
+
+                  {/* CREDENTIALS CARD */}
+                  <div className="bg-gradient-to-br from-indigo-950/70 to-slate-950 p-4 rounded-xl border border-indigo-700/60 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                        🔐 Portal Login Credentials
+                      </span>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded">
+                        Active Account
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 font-mono text-xs">
+                      <div className="flex items-center justify-between bg-slate-900/80 px-3 py-2 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[11px]">User ID:</span>
+                        <strong className="text-indigo-300 font-bold">{newlyOnboardedCredentials.bmUserId}</strong>
+                      </div>
+                      <div className="flex items-center justify-between bg-slate-900/80 px-3 py-2 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[11px]">Password:</span>
+                        <strong className="text-amber-300 font-bold">{newlyOnboardedCredentials.bmPassword}</strong>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Share these credentials with the Branch Manager. When they log in, they will have direct access only to their own branch portal with complete privacy and zero cross-branch agent visibility.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = `BMS Cloud - Branch Manager Portal Login\nCompany: ${newlyOnboardedCredentials.companyName}\nBranch: ${newlyOnboardedCredentials.branchLocation}\nManager: ${newlyOnboardedCredentials.bmName}\nUser ID: ${newlyOnboardedCredentials.bmUserId}\nPassword: ${newlyOnboardedCredentials.bmPassword}\nPortal: ${window.location.origin}${window.location.pathname}`;
+                      try { navigator.clipboard.writeText(text); } catch(e) {}
+                      setCopiedCreds(true);
+                      setTimeout(() => setCopiedCreds(false), 3000);
+                      showToast('✓ Credentials copied to clipboard!', 'success');
+                    }}
+                    className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center space-x-1.5 transition-colors shadow-md"
+                  >
+                    <span>{copiedCreds ? '✓' : '📋'}</span>
+                    <span>{copiedCreds ? 'Copied to Clipboard!' : 'Copy Credentials'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewlyOnboardedCredentials(null);
+                      setCopiedCreds(false);
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -13187,8 +11844,8 @@
                               <span className="text-lg">🏢</span>
                               <div>
                                 <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">Direct Reportee to Branch Head</span>
-                                <strong className="text-white text-xs block">{selectedTenant.contactPerson} (Branch Manager)</strong>
-                                <span className="text-[10px] text-slate-400">{selectedTenant.branchLocation} • 100% Branch Leadership Attribution</span>
+                                <strong className="text-white text-xs block">{selectedTenant ? selectedTenant.contactPerson : 'Branch Head'} (Branch Manager)</strong>
+                                <span className="text-[10px] text-slate-400">{selectedTenant ? selectedTenant.branchLocation : 'Current Branch'} • 100% Branch Leadership Attribution</span>
                               </div>
                             </div>
                             <span className="px-2.5 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-[10px] font-mono font-bold">
@@ -13292,8 +11949,8 @@
                     <>
                       <div className="p-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl text-slate-300">
                         <span className="text-[11px] block text-indigo-300 font-bold">🏢 Direct Report to Branch Manager:</span>
-                        <strong className="text-white text-xs">{selectedTenant.contactPerson}</strong>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">Head of {selectedTenant.branchLocation} (100% Attribution)</span>
+                        <strong className="text-white text-xs">{selectedTenant ? selectedTenant.contactPerson : 'Branch Manager'}</strong>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">Head of {selectedTenant ? selectedTenant.branchLocation : 'Current Branch'} (100% Attribution)</span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -15020,7 +13677,7 @@
                       onChange={(e) => setTransferTargetManagerId(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="bm-head">🏢 {selectedTenant.contactPerson} (Branch Manager - Direct)</option>
+                      <option value="bm-head">🏢 {selectedTenant ? selectedTenant.contactPerson : 'Branch Head'} (Branch Manager - Direct)</option>
                       <optgroup label="🤝 TSC / Distribution Leaders">
                         {currentTenantTeam.filter(m => m.role === 'TSE' && m.status !== 'Deleted' && m.id !== agentToTransfer.reportsToId).map(t => (
                           <option key={t.id} value={t.id}>
@@ -15730,23 +14387,38 @@
                   </div>
 
                   <div className="p-3 bg-amber-950/30 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 space-y-1">
-                    <p>💡 The user will be required to change this temporary password immediately upon their next login.</p>
+                    <p>💡 The user can immediately log in with this password.</p>
                   </div>
 
-                  <div className="flex justify-end space-x-2 pt-2">
+                  <div className="flex items-center justify-between pt-2">
                     <button
                       type="button"
-                      onClick={() => setShowResetUserPasswordModal(false)}
-                      className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold"
+                      onClick={() => {
+                        const txt = `BMS Portal Credentials\nRole: ${targetUserForReset.roleLabel}\nName: ${targetUserForReset.name}\nBranch: ${targetUserForReset.branchLocation || 'Central'}\nUser ID: ${targetUserForReset.userId}\nPassword: ${newResetPassword}\nPortal: ${window.location.origin}${window.location.pathname}`;
+                        try { navigator.clipboard.writeText(txt); } catch(e) {}
+                        showToast('✓ Credentials copied to clipboard!', 'success');
+                      }}
+                      className="px-3 py-2 bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-800/40 rounded-xl font-bold flex items-center space-x-1"
+                      title="Copy credentials before or after resetting"
                     >
-                      Cancel
+                      <span>📋</span>
+                      <span>Copy Credentials</span>
                     </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold"
-                    >
-                      Confirm Password Reset
-                    </button>
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowResetUserPasswordModal(false)}
+                        className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold"
+                      >
+                        Confirm Password Reset
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -16195,7 +14867,7 @@
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1 font-semibold">Branch Manager Head</label>
-                    <input type="text" readOnly value={selectedTenant.contactPerson} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white" />
+                    <input type="text" readOnly value={selectedTenant ? selectedTenant.contactPerson : 'Not Assigned'} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white" />
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2 pt-2">
@@ -16222,7 +14894,7 @@
                   <button onClick={() => setShowPrivacyModal(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
                 <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 space-y-2 text-slate-300 leading-relaxed text-[11px]">
-                  <p><strong>1. Tenant Data Isolation:</strong> All branch team personnel, leads, policy records, and activity notes remain strictly isolated to {selectedTenant.branchLocation} ({selectedTenant.companyName}).</p>
+                  <p><strong>1. Tenant Data Isolation:</strong> All branch team personnel, leads, policy records, and activity notes remain strictly isolated to {selectedTenant ? `${selectedTenant.branchLocation} (${selectedTenant.companyName})` : 'your dedicated branch portal'}.</p>
                   <p><strong>2. Super Admin Privacy:</strong> Super Admin acts strictly as a commercial SaaS landlord and cannot view or access branch personnel data or customer leads.</p>
                   <p><strong>3. Compliance & Offline Security:</strong> Operating under zero-CDN, offline-first security safeguards with client-side LocalStorage encryption.</p>
                 </div>
