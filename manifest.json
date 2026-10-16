@@ -1,0 +1,17 @@
+{
+  "short_name": "BMS Chat",
+  "name": "BMS Chat - Insurance Agency Business Management System",
+  "description": "Insurance Agency Business Management System for Branch Managers, FLS, TSC Leaders and Agents with Real-time Collaboration Chat",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>💬</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

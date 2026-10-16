@@ -1,0 +1,25 @@
+{
+  "name": "bms-chat-agency-management",
+  "version": "1.0.0",
+  "description": "Insurance Agency Business Management System (BMS) with Integrated Team Chat & Multi-tier Credit Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "keywords": [
+    "insurance",
+    "agency-management",
+    "bms-chat",
+    "fls",
+    "branch-manager",
+    "agent-clubs",
+    "contests"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "ISC"
+}
