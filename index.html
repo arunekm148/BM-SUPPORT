@@ -22,6 +22,9 @@
   <!-- Babel Standalone for in-browser JSX parsing -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- SheetJS for Native Excel .xlsx / .xls Parsing & Export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
   <!-- Optional Tailwind CDN with Error Safety Guard -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -266,7 +269,24 @@
     // ==========================================
     // 2. COMMERCIAL TENANTS (CLIENTS RENTING THE SOFTWARE)
     // ==========================================
-    const INITIAL_TENANTS = [];
+    const INITIAL_TENANTS = [
+      {
+        id: 'tnt-tenant-01',
+        companyName: 'Kochi Central Agency',
+        branchLocation: 'Kochi Metro Hub',
+        contactPerson: 'Arun Joy',
+        role: 'Branch Manager',
+        email: 'arunarumaliljoy@gmail.com',
+        phone: '+91 98000 00001',
+        rentedPlan: 'Professional Annual (Pro)',
+        cycle: 'Annual',
+        rentalFee: 8999,
+        validFrom: '2026-01-01',
+        validUntil: '2027-01-01',
+        status: 'Active Rental',
+        totalPaid: 8999
+      }
+    ];
 
     // ==========================================
     // 3. RECHARGE & RENTAL BILLING HISTORY
@@ -2200,6 +2220,42 @@
       const [showBranchSettingsModal, setShowBranchSettingsModal] = useState(false);
       const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
+      // ========================================================
+      // BDA AGENCY CODE GENERATION & ACTIVATION TRACKER STATES
+      // Minimum hurdle default ₹15,000 (persisted in bms_bda_activation_hurdle_v1)
+      // Cohorts: M0 (recruitment month), M1, M2, M3
+      // Qualification: >= hurdle qualifies for "Rising Star Club"
+      // ========================================================
+      const [bdaActivationHurdle, setBdaActivationHurdle] = useState(() => {
+        try {
+          const saved = localStorage.getItem('bms_bda_activation_hurdle_v1');
+          return saved ? Number(saved) : 15000;
+        } catch (e) {
+          return 15000;
+        }
+      });
+      const [bdaHurdleInput, setBdaHurdleInput] = useState(15000);
+      const [isEditingBdaHurdle, setIsEditingBdaHurdle] = useState(false);
+      const [bdaCohortMonthFilter, setBdaCohortMonthFilter] = useState('ALL'); // 'ALL' | '2026-10' | '2026-09' | '2026-08' | '2026-07' | '2026-06' | '2026-05'
+      const [bdaStatusFilter, setBdaStatusFilter] = useState('ALL'); // 'ALL' | 'RISING_STAR' | 'M0_ACTIVE' | 'M1_ACTIVE' | 'PENDING'
+      const [bdaSearchQuery, setBdaSearchQuery] = useState('');
+      const [bdaLeaderFilter, setBdaLeaderFilter] = useState('ALL');
+
+      // ========================================================
+      // AGENT EXCEL / CSV BULK UPLOAD & EDITABLE STAGING STATES
+      // Upload under TSE & FLS -> Parse -> Detect existing (phone update) vs new ->
+      // Interactive separate staging view with inline editing -> Confirm & Add
+      // ========================================================
+      const [showAgentExcelImportModal, setShowAgentExcelImportModal] = useState(false);
+      const [showAgentImportStagingModal, setShowAgentImportStagingModal] = useState(false);
+      const [agentImportStagingRows, setAgentImportStagingRows] = useState([]);
+      const [agentImportFileName, setAgentImportFileName] = useState('');
+      const [agentImportSearch, setAgentImportSearch] = useState('');
+      const [agentImportStatusFilter, setAgentImportStatusFilter] = useState('ALL'); // 'ALL' | 'NEW' | 'UPDATE'
+      const [agentImportTargetRole, setAgentImportTargetRole] = useState('AGENT');
+      const [agentImportDefaultReportingType, setAgentImportDefaultReportingType] = useState('TSC');
+      const [agentImportDefaultLeaderId, setAgentImportDefaultLeaderId] = useState('');
+
       // Filtered Tenants
       const filteredTenants = useMemo(() => {
         if (!tenantSearch.trim()) return tenants;
@@ -2639,6 +2695,724 @@
         setShowCreateMemberModal(false);
         showToast(`✓ Added ${newMem.name} (${newMem.code}) as ${newMem.roleLabel}!`, 'success');
       };
+
+      // ========================================================
+      // BDA ACTIVATION TRACKER COMPUTATION ENGINE (LAST 6 MONTHS)
+      // Evaluates cohorts M0..M3 against hurdle (default ₹15,000)
+      // Qualifiers achieve "Rising Star Club"
+      // ========================================================
+      const bdaReferenceMonth = '2026-10'; // October 2026
+      const bdaLast6CohortMonths = [
+        { key: '2026-10', label: 'October 2026 (M0 Current)', short: 'Oct 2026', tag: 'M0' },
+        { key: '2026-09', label: 'September 2026 (M1 Cohort)', short: 'Sep 2026', tag: 'M1' },
+        { key: '2026-08', label: 'August 2026 (M2 Cohort)', short: 'Aug 2026', tag: 'M2' },
+        { key: '2026-07', label: 'July 2026 (M3 Cohort)', short: 'Jul 2026', tag: 'M3' },
+        { key: '2026-06', label: 'June 2026 (M4 Cohort)', short: 'Jun 2026', tag: 'M4' },
+        { key: '2026-05', label: 'May 2026 (M5 Cohort)', short: 'May 2026', tag: 'M5' }
+      ];
+
+      // Save custom BDA qualification activation hurdle
+      const handleSaveBdaHurdle = (newVal) => {
+        const val = Math.max(1000, Number(newVal) || 15000);
+        setBdaActivationHurdle(val);
+        try { localStorage.setItem('bms_bda_activation_hurdle_v1', String(val)); } catch (e) {}
+        setIsEditingBdaHurdle(false);
+        showToast(`✓ BDA Minimum Activation Hurdle updated to ₹${val.toLocaleString('en-IN')}! Rising Star Club qualifiers recalculated.`, 'success');
+      };
+
+      // Helper: get month string after N months
+      const addMonthsToYearMonth = (ym, n) => {
+        if (!ym || ym.length < 7) return '';
+        const parts = ym.split('-');
+        const y = Number(parts[0]);
+        const m = Number(parts[1]);
+        const d = new Date(y, m - 1 + n, 1);
+        const resY = d.getFullYear();
+        const resM = String(d.getMonth() + 1).padStart(2, '0');
+        return `${resY}-${resM}`;
+      };
+
+      // Extract all BDA / newly coded advisors with their 6-month cohort metrics
+      const bdaCohortData = useMemo(() => {
+        // Target candidate agents in current branch (or branchTeam fallback)
+        const candidateAgents = ((currentTenantTeam && currentTenantTeam.length > 0)
+          ? currentTenantTeam
+          : (branchTeam || [])
+        ).filter(m => m.role === 'AGENT' && m.status !== 'Deleted');
+
+        const candidatePolicies = (currentTenantPolicies && currentTenantPolicies.length > 0)
+          ? currentTenantPolicies
+          : (policies || []);
+
+        // Map candidate agents with cohort details
+        const enrichedAgents = candidateAgents.map(ag => {
+          const rawJoin = ag.joinedDate || '2026-10-01';
+          const joinMonth = rawJoin.slice(0, 7);
+
+          // Target months for M0, M1, M2, M3
+          const m0Month = joinMonth;
+          const m1Month = addMonthsToYearMonth(joinMonth, 1);
+          const m2Month = addMonthsToYearMonth(joinMonth, 2);
+          const m3Month = addMonthsToYearMonth(joinMonth, 3);
+
+          // Calculate business in each relative month
+          const agPolicies = candidatePolicies.filter(p => {
+            const pCode = (p.agentCode || '').trim().toUpperCase();
+            const pName = (p.agentName || '').trim().toLowerCase();
+            return (pCode && pCode === (ag.code || '').trim().toUpperCase()) ||
+                   (pName && pName === (ag.name || '').trim().toLowerCase()) ||
+                   (p.agentId && p.agentId === ag.id);
+          });
+
+          const getMonthVol = (ym) => {
+            if (!ym) return 0;
+            return agPolicies
+              .filter(p => p.issueDate && p.issueDate.startsWith(ym))
+              .reduce((sum, p) => sum + (Number(p.premiumAmount) || 0), 0);
+          };
+
+          const m0Premium = getMonthVol(m0Month);
+          const m1Premium = getMonthVol(m1Month);
+          const m2Premium = getMonthVol(m2Month);
+          const m3Premium = getMonthVol(m3Month);
+          const totalActivationPremium = m0Premium + m1Premium + m2Premium + m3Premium;
+
+          // Hurdle checks
+          const isM0Active = m0Premium >= bdaActivationHurdle;
+          const isM1Active = m1Premium >= bdaActivationHurdle;
+          const isM2Active = m2Premium >= bdaActivationHurdle;
+          const isM3Active = m3Premium >= bdaActivationHurdle;
+          const isM0Any = m0Premium > 0;
+          const isM1Any = m1Premium > 0;
+          const isM2Any = m2Premium > 0;
+          const isM3Any = m3Premium > 0;
+
+          // Overall hurdle qualification (Rising Star Club)
+          const isRisingStarQualified = totalActivationPremium >= bdaActivationHurdle;
+
+          return {
+            ...ag,
+            joinMonth,
+            m0Month,
+            m1Month,
+            m2Month,
+            m3Month,
+            m0Premium,
+            m1Premium,
+            m2Premium,
+            m3Premium,
+            totalActivationPremium,
+            isM0Active,
+            isM1Active,
+            isM2Active,
+            isM3Active,
+            isM0Any,
+            isM1Any,
+            isM2Any,
+            isM3Any,
+            isRisingStarQualified
+          };
+        });
+
+        // Compute cohort rows for the last 6 months
+        const cohortRows = bdaLast6CohortMonths.map(c => {
+          const cohortAgents = enrichedAgents.filter(a => a.joinMonth === c.key);
+          const codesGenerated = cohortAgents.length;
+
+          // M0
+          const m0ActiveCount = cohortAgents.filter(a => a.isM0Active).length;
+          const m0AnyCount = cohortAgents.filter(a => a.isM0Any).length;
+          const m0Volume = cohortAgents.reduce((sum, a) => sum + a.m0Premium, 0);
+
+          // M1
+          const m1ActiveCount = cohortAgents.filter(a => a.isM1Active).length;
+          const m1AnyCount = cohortAgents.filter(a => a.isM1Any).length;
+          const m1Volume = cohortAgents.reduce((sum, a) => sum + a.m1Premium, 0);
+
+          // M2
+          const m2ActiveCount = cohortAgents.filter(a => a.isM2Active).length;
+          const m2AnyCount = cohortAgents.filter(a => a.isM2Any).length;
+          const m2Volume = cohortAgents.reduce((sum, a) => sum + a.m2Premium, 0);
+
+          // M3
+          const m3ActiveCount = cohortAgents.filter(a => a.isM3Active).length;
+          const m3AnyCount = cohortAgents.filter(a => a.isM3Any).length;
+          const m3Volume = cohortAgents.reduce((sum, a) => sum + a.m3Premium, 0);
+
+          // Total Activated (meeting hurdle across M0-M3)
+          const totalActivated = cohortAgents.filter(a => a.isRisingStarQualified).length;
+          const activationRate = codesGenerated > 0 ? ((totalActivated / codesGenerated) * 100).toFixed(1) : '0.0';
+          const totalCohortPremium = cohortAgents.reduce((sum, a) => sum + a.totalActivationPremium, 0);
+          const risingStarCount = totalActivated;
+
+          return {
+            cohortKey: c.key,
+            label: c.label,
+            short: c.short,
+            tag: c.tag,
+            agents: cohortAgents,
+            codesGenerated,
+            m0ActiveCount,
+            m0AnyCount,
+            m0Volume,
+            m1ActiveCount,
+            m1AnyCount,
+            m1Volume,
+            m2ActiveCount,
+            m2AnyCount,
+            m2Volume,
+            m3ActiveCount,
+            m3AnyCount,
+            m3Volume,
+            totalActivated,
+            activationRate,
+            risingStarCount,
+            totalCohortPremium
+          };
+        });
+
+        // Overall summary totals across all 6 cohorts
+        const totalCodesGenerated = cohortRows.reduce((sum, c) => sum + c.codesGenerated, 0);
+        const totalM0Active = cohortRows.reduce((sum, c) => sum + c.m0ActiveCount, 0);
+        const totalM1Active = cohortRows.reduce((sum, c) => sum + c.m1ActiveCount, 0);
+        const totalM2Active = cohortRows.reduce((sum, c) => sum + c.m2ActiveCount, 0);
+        const totalM3Active = cohortRows.reduce((sum, c) => sum + c.m3ActiveCount, 0);
+        const grandTotalActivated = cohortRows.reduce((sum, c) => sum + c.totalActivated, 0);
+        const grandTotalRisingStar = cohortRows.reduce((sum, c) => sum + c.risingStarCount, 0);
+        const grandTotalVolume = cohortRows.reduce((sum, c) => sum + c.totalCohortPremium, 0);
+        const overallActivationRate = totalCodesGenerated > 0 ? ((grandTotalActivated / totalCodesGenerated) * 100).toFixed(1) : '0.0';
+
+        return {
+          enrichedAgents,
+          cohortRows,
+          totalCodesGenerated,
+          totalM0Active,
+          totalM1Active,
+          totalM2Active,
+          totalM3Active,
+          grandTotalActivated,
+          grandTotalRisingStar,
+          grandTotalVolume,
+          overallActivationRate
+        };
+      }, [currentTenantTeam, currentTenantPolicies, policies, bdaActivationHurdle]);
+
+      // Filtered BDA Advisor Roster for display
+      const filteredBdaAgentsList = useMemo(() => {
+        let list = [...(bdaCohortData.enrichedAgents || [])];
+
+        // Filter by Cohort Month
+        if (bdaCohortMonthFilter !== 'ALL') {
+          list = list.filter(a => a.joinMonth === bdaCohortMonthFilter);
+        }
+
+        // Filter by Status
+        if (bdaStatusFilter === 'RISING_STAR') {
+          list = list.filter(a => a.isRisingStarQualified);
+        } else if (bdaStatusFilter === 'M0_ACTIVE') {
+          list = list.filter(a => a.isM0Active || a.isM0Any);
+        } else if (bdaStatusFilter === 'M1_ACTIVE') {
+          list = list.filter(a => a.isM1Active || a.isM1Any);
+        } else if (bdaStatusFilter === 'PENDING') {
+          list = list.filter(a => !a.isRisingStarQualified);
+        }
+
+        // Filter by Leader
+        if (bdaLeaderFilter !== 'ALL') {
+          list = list.filter(a => a.reportsToId === bdaLeaderFilter || (a.reportsToName && a.reportsToName.includes(bdaLeaderFilter)));
+        }
+
+        // Search query
+        if (bdaSearchQuery.trim()) {
+          const q = bdaSearchQuery.toLowerCase().trim();
+          list = list.filter(a =>
+            (a.name || '').toLowerCase().includes(q) ||
+            (a.code || '').toLowerCase().includes(q) ||
+            (a.phone || '').toLowerCase().includes(q) ||
+            (a.reportsToName || '').toLowerCase().includes(q)
+          );
+        }
+
+        return list;
+      }, [bdaCohortData, bdaCohortMonthFilter, bdaStatusFilter, bdaLeaderFilter, bdaSearchQuery]);
+
+      // ========================================================
+      // EXCEL / CSV AGENT IMPORT & INLINE STAGING HANDLERS
+      // Parses .xlsx / .xls (SheetJS) or .csv -> detects existing agents (by code)
+      // to update phone number or other fields -> stages in separate review view
+      // ========================================================
+
+      // Helper: parse CSV string into objects
+      const parseCsvText = (csvText) => {
+        const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+        if (lines.length < 2) return [];
+
+        const splitCsvLine = (line) => {
+          const res = [];
+          let current = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"' || ch === "'") {
+              inQuotes = !inQuotes;
+            } else if (ch === ',' && !inQuotes) {
+              res.push(current.trim());
+              current = '';
+            } else {
+              current += ch;
+            }
+          }
+          res.push(current.trim());
+          return res;
+        };
+
+        const headers = splitCsvLine(lines[0]).map(h => h.replace(/^["']|["']$/g, '').trim());
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = splitCsvLine(lines[i]).map(v => v.replace(/^["']|["']$/g, '').trim());
+          const obj = {};
+          headers.forEach((h, idx) => {
+            obj[h] = values[idx] || '';
+          });
+          rows.push(obj);
+        }
+        return rows;
+      };
+
+      // Helper to match column headers by loose aliases
+      const extractRowVal = (row, aliases) => {
+        const keys = Object.keys(row);
+        for (const key of keys) {
+          const cleanKey = key.trim().toLowerCase().replace(/[\s_\-#.]+/g, '');
+          for (const alias of aliases) {
+            const cleanAlias = alias.toLowerCase().replace(/[\s_\-#.]+/g, '');
+            if (cleanKey === cleanAlias) {
+              return String(row[key] || '').trim();
+            }
+          }
+        }
+        return '';
+      };
+
+      // Handler: File Upload (Excel or CSV)
+      const handleAgentFileUpload = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        setAgentImportFileName(file.name);
+        const reader = new FileReader();
+
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+        reader.onload = (loadEvent) => {
+          try {
+            let rawData = [];
+            if (isExcel && window.XLSX) {
+              const arrayBuffer = loadEvent.target.result;
+              const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              rawData = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+            } else {
+              const textContent = typeof loadEvent.target.result === 'string'
+                ? loadEvent.target.result
+                : new TextDecoder('utf-8').decode(loadEvent.target.result);
+              rawData = parseCsvText(textContent);
+            }
+
+            if (!rawData || rawData.length === 0) {
+              showToast('⚠️ Could not find any valid rows in uploaded file. Please check file format.', 'warning');
+              return;
+            }
+
+            // Find current leaders for auto-assignment
+            const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
+            const flsList = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
+            const defaultTse = tseList[0] || null;
+            const defaultFls = flsList[0] || null;
+
+            // Process each raw row and match against existing branchTeam
+            const staged = rawData.map((row, index) => {
+              const tempId = `stage-${Date.now()}-${index}`;
+
+              // Extracted fields
+              const rawCode = extractRowVal(row, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id']);
+              const rawName = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor']);
+              const rawPhone = extractRowVal(row, ['phone', 'phonenumber', 'mobile', 'mobileno', 'contact', 'contactno', 'tel', 'cell']);
+              const rawEmail = extractRowVal(row, ['email', 'emailid', 'mail', 'emailaddress']);
+              const rawReporting = extractRowVal(row, ['reportingtype', 'type', 'hierarchy', 'segment', 'channel', 'role']);
+              const rawLeader = extractRowVal(row, ['leader', 'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reportstoname']);
+              const rawDate = extractRowVal(row, ['date', 'joineddate', 'codingdate', 'doj', 'createddate', 'created_at']);
+              const rawTerritory = extractRowVal(row, ['territory', 'location', 'branch', 'region', 'area']);
+
+              // Normalize Reporting Type: TSC vs FLS
+              let reportingType = 'TSC';
+              const repLower = (rawReporting || '').toLowerCase();
+              if (repLower.includes('fls') || repLower.includes('sm') || repLower.includes('direct sales')) {
+                reportingType = 'FLS';
+              } else if (repLower.includes('tsc') || repLower.includes('tse') || repLower.includes('dl')) {
+                reportingType = 'TSC';
+              } else {
+                reportingType = agentImportDefaultReportingType || 'TSC';
+              }
+
+              // Match Leader
+              let reportsToId = '';
+              let reportsToName = '';
+              let reportsToRole = reportingType === 'FLS' ? 'SALES_MANAGER' : 'TSE';
+
+              if (rawLeader) {
+                const qLeader = rawLeader.toLowerCase();
+                const matchedLeader = currentTenantTeam.find(m =>
+                  m.name.toLowerCase().includes(qLeader) ||
+                  m.code.toLowerCase().includes(qLeader) ||
+                  m.id.toLowerCase() === qLeader
+                );
+                if (matchedLeader) {
+                  reportsToId = matchedLeader.id;
+                  reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
+                  reportsToRole = matchedLeader.role;
+                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSC';
+                }
+              }
+
+              if (!reportsToId) {
+                if (reportingType === 'FLS' && defaultFls) {
+                  reportsToId = defaultFls.id;
+                  reportsToName = `${defaultFls.name} (${defaultFls.code})`;
+                } else if (defaultTse) {
+                  reportsToId = defaultTse.id;
+                  reportsToName = `${defaultTse.name} (${defaultTse.code})`;
+                }
+              }
+
+              // MATCH AGAINST EXISTING AGENTS IN PORTAL
+              // Search by Code or Phone or Email
+              const cleanCode = rawCode.trim().toUpperCase();
+              const cleanPhone = rawPhone.trim().replace(/[^0-9+]/g, '');
+
+              const existingAgent = (branchTeam || []).find(m => {
+                const mCode = (m.code || '').trim().toUpperCase();
+                const mPhone = (m.phone || '').trim().replace(/[^0-9+]/g, '');
+                const mEmail = (m.email || '').trim().toLowerCase();
+                return (cleanCode && mCode === cleanCode) ||
+                       (cleanPhone && cleanPhone.length >= 10 && mPhone && mPhone.slice(-10) === cleanPhone.slice(-10)) ||
+                       (rawEmail && mEmail && mEmail === rawEmail.trim().toLowerCase());
+              });
+
+              const isUpdate = Boolean(existingAgent);
+              const oldPhone = existingAgent ? (existingAgent.phone || '') : '';
+              const finalPhone = rawPhone.trim() || oldPhone || '+91 98000 00000';
+              const phoneChanged = isUpdate && Boolean(rawPhone.trim() && rawPhone.trim() !== oldPhone);
+
+              return {
+                tempId,
+                action: isUpdate ? 'UPDATE' : 'NEW',
+                existingAgentId: existingAgent ? existingAgent.id : null,
+                code: rawCode.trim() || (existingAgent ? existingAgent.code : `BDA-${Date.now().toString().slice(-4)}`),
+                name: rawName.trim() || (existingAgent ? existingAgent.name : 'Advisor Name'),
+                phone: finalPhone,
+                oldPhone,
+                phoneChanged,
+                email: rawEmail.trim() || (existingAgent ? existingAgent.email : ''),
+                reportingType,
+                reportsToId: reportsToId || (existingAgent ? existingAgent.reportsToId : ''),
+                reportsToName: reportsToName || (existingAgent ? existingAgent.reportsToName : ''),
+                reportsToRole,
+                joinedDate: rawDate.trim() || (existingAgent ? existingAgent.joinedDate : new Date().toISOString().split('T')[0]),
+                territory: rawTerritory.trim() || (existingAgent ? existingAgent.territory : 'Central Metro Hub'),
+                vertical: existingAgent ? existingAgent.vertical : 'Branch Agency Vertical',
+                clubTier: existingAgent ? existingAgent.clubTier : 'Associate (15%)',
+                isValid: Boolean(rawCode.trim() || rawName.trim() || existingAgent)
+              };
+            });
+
+            setAgentImportStagingRows(staged);
+            setShowAgentExcelImportModal(false);
+            setShowAgentImportStagingModal(true);
+            showToast(`📂 Successfully loaded ${staged.length} records from "${file.name}" into the Staging Review list. You can edit any field before confirming!`, 'success');
+          } catch (err) {
+            console.error('Error parsing agent file:', err);
+            showToast(`❌ Error reading file: ${err.message}`, 'error');
+          }
+        };
+
+        if (isExcel) {
+          reader.readAsArrayBuffer(file);
+        } else {
+          reader.readAsText(file);
+        }
+
+        // Reset input value so same file can be re-selected if needed
+        e.target.value = '';
+      };
+
+      // Inline field update for staging row
+      const handleUpdateStagedRow = (tempId, field, value) => {
+        setAgentImportStagingRows(prev => prev.map(row => {
+          if (row.tempId !== tempId) return row;
+          const updated = { ...row, [field]: value };
+          if (field === 'phone' && row.action === 'UPDATE') {
+            updated.phoneChanged = Boolean(value && value !== row.oldPhone);
+          }
+          if (field === 'reportingType') {
+            // Auto update leader option if switching between TSC and FLS
+            if (value === 'FLS') {
+              const smList = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
+              if (smList.length > 0) {
+                updated.reportsToId = smList[0].id;
+                updated.reportsToName = `${smList[0].name} (${smList[0].code})`;
+                updated.reportsToRole = 'SALES_MANAGER';
+              }
+            } else {
+              const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
+              if (tseList.length > 0) {
+                updated.reportsToId = tseList[0].id;
+                updated.reportsToName = `${tseList[0].name} (${tseList[0].code})`;
+                updated.reportsToRole = 'TSE';
+              }
+            }
+          }
+          if (field === 'reportsToId') {
+            const ldr = currentTenantTeam.find(m => m.id === value);
+            if (ldr) {
+              updated.reportsToName = `${ldr.name} (${ldr.code})`;
+              updated.reportsToRole = ldr.role;
+              updated.reportingType = ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC';
+            }
+          }
+          return updated;
+        }));
+      };
+
+      // Remove a row from staging
+      const handleRemoveStagedRow = (tempId) => {
+        setAgentImportStagingRows(prev => prev.filter(r => r.tempId !== tempId));
+        showToast('Removed record from staging list.', 'info');
+      };
+
+      // Add a blank row manually to staging
+      const handleAddStagedRowManual = () => {
+        const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
+        const defaultLeader = tseList[0] || null;
+        const newRow = {
+          tempId: `stage-${Date.now()}-manual`,
+          action: 'NEW',
+          existingAgentId: null,
+          code: `BDA-${Date.now().toString().slice(-4)}`,
+          name: '',
+          phone: '+91 ',
+          oldPhone: '',
+          phoneChanged: false,
+          email: '',
+          reportingType: 'TSC',
+          reportsToId: defaultLeader ? defaultLeader.id : '',
+          reportsToName: defaultLeader ? `${defaultLeader.name} (${defaultLeader.code})` : '',
+          reportsToRole: 'TSE',
+          joinedDate: new Date().toISOString().split('T')[0],
+          territory: 'Central Metro Hub',
+          vertical: 'Branch Agency Vertical',
+          clubTier: 'Associate (15%)',
+          isValid: true
+        };
+        setAgentImportStagingRows(prev => [newRow, ...prev]);
+        showToast('Added new editable row to staging table.', 'info');
+      };
+
+      // Download Sample Excel/CSV Template
+      const handleDownloadAgentTemplate = () => {
+        const headers = ['Agent Code', 'Full Name', 'Phone Number', 'Email', 'Reporting Type', 'Assigned Leader', 'Joined Date', 'Territory'];
+        const sampleRows = [
+          ['BDA-8035', 'Sunil Narang', '+91 98450 11223', 'sunil.narang@branchagency.internal', 'TSC', 'Rohan Deshmukh (TSE-201)', '2026-10-15', 'Central Metro Hub'],
+          ['BDA-8036', 'Kavita Chawla', '+91 98110 44556', 'kavita.chawla@branchagency.internal', 'FLS', 'Vikram Malhotra (SM-101)', '2026-10-14', 'North Zone Hub'],
+          ['BDA-8012', 'Sunita Rao', '+91 98201 99887', 'sunita.rao@branchagency.internal', 'TSC', 'Rohan Deshmukh (TSE-201)', '2026-09-12', 'Central Metro Hub']
+        ];
+
+        const csvContent = [headers.join(','), ...sampleRows.map(r => r.map(val => `"${val}"`).join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'BMS_Agent_Creation_and_Phone_Update_Template.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('📥 Downloaded Agent Creation & Phone Update CSV template!', 'success');
+      };
+
+      // Final Confirmation: Directly add and update into the portal database
+      const handleConfirmBulkAgentImport = () => {
+        if (!agentImportStagingRows || agentImportStagingRows.length === 0) {
+          showToast('⚠️ No records to import.', 'warning');
+          return;
+        }
+
+        const validRows = agentImportStagingRows.filter(r => (r.code && r.code.trim()) || (r.name && r.name.trim()));
+        if (validRows.length === 0) {
+          showToast('⚠️ Please ensure records have at least an Agent Code or Full Name.', 'warning');
+          return;
+        }
+
+        const currentTenantId = selectedTenant ? selectedTenant.id : 'tnt-tenant-01';
+        let newCount = 0;
+        let updateCount = 0;
+        let phoneUpdateCount = 0;
+
+        // Build updated team map
+        let updatedTeam = [...branchTeam];
+
+        validRows.forEach(row => {
+          if (row.action === 'UPDATE' && row.existingAgentId) {
+            // UPDATE EXISTING AGENT
+            const idx = updatedTeam.findIndex(m => m.id === row.existingAgentId);
+            if (idx !== -1) {
+              const current = updatedTeam[idx];
+              if (row.phoneChanged || (row.phone && row.phone !== current.phone)) {
+                phoneUpdateCount++;
+              }
+              updatedTeam[idx] = {
+                ...current,
+                name: row.name.trim() || current.name,
+                code: row.code.trim().toUpperCase() || current.code,
+                phone: row.phone.trim() || current.phone,
+                email: row.email.trim() || current.email,
+                reportsToId: row.reportsToId || current.reportsToId,
+                reportsToName: row.reportsToName || current.reportsToName,
+                reportsToRole: row.reportsToRole || current.reportsToRole,
+                joinedDate: row.joinedDate || current.joinedDate,
+                territory: row.territory || current.territory,
+                vertical: row.vertical || current.vertical,
+                status: 'Active'
+              };
+              updateCount++;
+            }
+          } else {
+            // CREATE NEW AGENT RECORD
+            const newAgent = {
+              id: `tm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              tenantId: currentTenantId,
+              name: row.name.trim() || 'New Advisor',
+              code: row.code.trim().toUpperCase() || `BDA-${Date.now().toString().slice(-4)}`,
+              role: 'AGENT',
+              roleLabel: '🌟 Insurance Advisor (Agent)',
+              reportsToId: row.reportsToId || '',
+              reportsToName: row.reportsToName || '',
+              reportsToRole: row.reportsToRole || (row.reportingType === 'FLS' ? 'SALES_MANAGER' : 'TSE'),
+              email: row.email.trim() || `${(row.name || 'advisor').toLowerCase().replace(/\s+/g, '.')}@branchagency.internal`,
+              phone: row.phone.trim() || '+91 98000 00000',
+              vertical: row.vertical || 'Branch Agency Vertical',
+              territory: row.territory || 'Central Metro Hub',
+              clubTier: row.clubTier || 'Associate (15%)',
+              miniLakpati: 'Not Started',
+              contestStatus: 'Not Enrolled',
+              joinedDate: row.joinedDate || new Date().toISOString().split('T')[0],
+              lastActiveDate: row.joinedDate || new Date().toISOString().split('T')[0],
+              status: 'Active'
+            };
+            updatedTeam = [newAgent, ...updatedTeam];
+            newCount++;
+          }
+        });
+
+        // Save into branchTeam state and localStorage
+        setBranchTeam(updatedTeam);
+        try {
+          localStorage.setItem('bms_branch_team_v3', JSON.stringify(updatedTeam));
+        } catch (e) {
+          console.error('LocalStorage write error:', e);
+        }
+
+        setShowAgentImportStagingModal(false);
+        setAgentImportStagingRows([]);
+
+        showToast(`🎉 Confirmed! Successfully synced ${validRows.length} agents directly to portal (${newCount} new agents created, ${updateCount} updated including ${phoneUpdateCount} phone number updates)!`, 'success');
+      };
+
+      // Auto-seed realistic BDA Cohort Advisors & Policies if fewer than 6 agents exist
+      useEffect(() => {
+        try {
+          const currentTenantId = selectedTenant ? selectedTenant.id : 'tnt-tenant-01';
+          const existingAgents = branchTeam.filter(m => m.role === 'AGENT');
+          if (existingAgents.length < 8) {
+            const seedBdaAgents = [
+              { id: 'tm-bda-8011', tenantId: currentTenantId, code: 'BDA-8011', name: 'Arjun Varma', phone: '+91 98201 11223', email: 'arjun.varma@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-05-10', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8012', tenantId: currentTenantId, code: 'BDA-8012', name: 'Kavita Chawla', phone: '+91 98202 22334', email: 'kavita.chawla@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-05-18', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8013', tenantId: currentTenantId, code: 'BDA-8013', name: 'Siddharth Roy', phone: '+91 98203 33445', email: 'siddharth.roy@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-06-08', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8014', tenantId: currentTenantId, code: 'BDA-8014', name: 'Megha Saxena', phone: '+91 98204 44556', email: 'megha.saxena@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-102', reportsToName: 'Priya Sharma (SM-102)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-06-22', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Associate (15%)', status: 'Active' },
+              { id: 'tm-bda-8015', tenantId: currentTenantId, code: 'BDA-8015', name: 'Nikhil Joshi', phone: '+91 98205 55667', email: 'nikhil.joshi@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-07-05', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8016', tenantId: currentTenantId, code: 'BDA-8016', name: 'Ananya Nair', phone: '+91 98206 66778', email: 'ananya.nair@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-07-19', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8017', tenantId: currentTenantId, code: 'BDA-8017', name: 'Gaurav Singhal', phone: '+91 98207 77889', email: 'gaurav.singhal@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-07-28', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Associate (15%)', status: 'Active' },
+              { id: 'tm-bda-8018', tenantId: currentTenantId, code: 'BDA-8018', name: 'Divya Pillai', phone: '+91 98208 88990', email: 'divya.pillai@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-08-04', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8019', tenantId: currentTenantId, code: 'BDA-8019', name: 'Harish Kulkarni', phone: '+91 98209 99001', email: 'harish.kulkarni@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-102', reportsToName: 'Priya Sharma (SM-102)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-08-16', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8020', tenantId: currentTenantId, code: 'BDA-8020', name: 'Pallavi Sen', phone: '+91 98210 10112', email: 'pallavi.sen@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-08-27', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Associate (15%)', status: 'Active' },
+              { id: 'tm-bda-8021', tenantId: currentTenantId, code: 'BDA-8021', name: 'Karan Bajaj', phone: '+91 98211 21223', email: 'karan.bajaj@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-09-06', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8022', tenantId: currentTenantId, code: 'BDA-8022', name: 'Ritu Mehrotra', phone: '+91 98212 32334', email: 'ritu.mehrotra@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-09-20', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8023', tenantId: currentTenantId, code: 'BDA-8023', name: 'Tarun Bhatia', phone: '+91 98213 43445', email: 'tarun.bhatia@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-10-04', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
+              { id: 'tm-bda-8024', tenantId: currentTenantId, code: 'BDA-8024', name: 'Simran Kaur', phone: '+91 98214 54556', email: 'simran.kaur@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-10-11', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' }
+            ];
+
+            // Filter out existing by code
+            const existingCodes = branchTeam.map(m => (m.code || '').toUpperCase());
+            const toAdd = seedBdaAgents.filter(s => !existingCodes.includes(s.code.toUpperCase()));
+            if (toAdd.length > 0) {
+              const mergedTeam = [...branchTeam, ...toAdd];
+              setBranchTeam(mergedTeam);
+              try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(mergedTeam)); } catch (e) {}
+            }
+
+            // Also seed corresponding policies for cohorts
+            const seedBdaPolicies = [
+              // May cohort
+              { id: 'pol-bda-8011-m0', policyNumber: 'POL-BDA-8011-01', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 16500, issueDate: '2026-05-14', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8011-m1', policyNumber: 'POL-BDA-8011-02', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 18000, issueDate: '2026-06-18', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8011-m2', policyNumber: 'POL-BDA-8011-03', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 15500, issueDate: '2026-07-20', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8011-m3', policyNumber: 'POL-BDA-8011-04', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 21000, issueDate: '2026-08-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8012-m0', policyNumber: 'POL-BDA-8012-01', agentCode: 'BDA-8012', agentName: 'Kavita Chawla', premiumAmount: 14000, issueDate: '2026-05-22', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8012-m1', policyNumber: 'POL-BDA-8012-02', agentCode: 'BDA-8012', agentName: 'Kavita Chawla', premiumAmount: 15500, issueDate: '2026-06-25', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              // June cohort
+              { id: 'pol-bda-8013-m0', policyNumber: 'POL-BDA-8013-01', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 19000, issueDate: '2026-06-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8013-m1', policyNumber: 'POL-BDA-8013-02', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 17000, issueDate: '2026-07-16', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8013-m2', policyNumber: 'POL-BDA-8013-03', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 16500, issueDate: '2026-08-19', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8013-m3', policyNumber: 'POL-BDA-8013-04', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 22000, issueDate: '2026-09-14', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8014-m0', policyNumber: 'POL-BDA-8014-01', agentCode: 'BDA-8014', agentName: 'Megha Saxena', premiumAmount: 9000, issueDate: '2026-06-28', branchId: currentTenantId, productName: 'Term Protection Life', status: 'In Force' },
+              // July cohort
+              { id: 'pol-bda-8015-m0', policyNumber: 'POL-BDA-8015-01', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 24000, issueDate: '2026-07-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8015-m1', policyNumber: 'POL-BDA-8015-02', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 18000, issueDate: '2026-08-15', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8015-m2', policyNumber: 'POL-BDA-8015-03', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 20000, issueDate: '2026-09-18', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8015-m3', policyNumber: 'POL-BDA-8015-04', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 16000, issueDate: '2026-10-09', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8016-m0', policyNumber: 'POL-BDA-8016-01', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 15500, issueDate: '2026-07-22', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8016-m1', policyNumber: 'POL-BDA-8016-02', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 12000, issueDate: '2026-08-20', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8016-m2', policyNumber: 'POL-BDA-8016-03', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 16000, issueDate: '2026-09-25', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8017-m0', policyNumber: 'POL-BDA-8017-01', agentCode: 'BDA-8017', agentName: 'Gaurav Singhal', premiumAmount: 8000, issueDate: '2026-07-30', branchId: currentTenantId, productName: 'Term Protection Life', status: 'In Force' },
+              // August cohort
+              { id: 'pol-bda-8018-m0', policyNumber: 'POL-BDA-8018-01', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 18000, issueDate: '2026-08-09', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8018-m1', policyNumber: 'POL-BDA-8018-02', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 21000, issueDate: '2026-09-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8018-m2', policyNumber: 'POL-BDA-8018-03', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 17500, issueDate: '2026-10-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8019-m0', policyNumber: 'POL-BDA-8019-01', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 15000, issueDate: '2026-08-20', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8019-m1', policyNumber: 'POL-BDA-8019-02', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 16500, issueDate: '2026-09-21', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8019-m2', policyNumber: 'POL-BDA-8019-03', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 14000, issueDate: '2026-10-08', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              // September cohort
+              { id: 'pol-bda-8021-m0', policyNumber: 'POL-BDA-8021-01', agentCode: 'BDA-8021', agentName: 'Karan Bajaj', premiumAmount: 17000, issueDate: '2026-09-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8021-m1', policyNumber: 'POL-BDA-8021-02', agentCode: 'BDA-8021', agentName: 'Karan Bajaj', premiumAmount: 19500, issueDate: '2026-10-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8022-m0', policyNumber: 'POL-BDA-8022-01', agentCode: 'BDA-8022', agentName: 'Ritu Mehrotra', premiumAmount: 15200, issueDate: '2026-09-24', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              { id: 'pol-bda-8022-m1', policyNumber: 'POL-BDA-8022-02', agentCode: 'BDA-8022', agentName: 'Ritu Mehrotra', premiumAmount: 11000, issueDate: '2026-10-05', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
+              // October cohort (Current Month M0 Fast-Starters)
+              { id: 'pol-bda-8023-m0', policyNumber: 'POL-BDA-8023-01', agentCode: 'BDA-8023', agentName: 'Tarun Bhatia', premiumAmount: 22000, issueDate: '2026-10-06', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
+              { id: 'pol-bda-8024-m0', policyNumber: 'POL-BDA-8024-01', agentCode: 'BDA-8024', agentName: 'Simran Kaur', premiumAmount: 16500, issueDate: '2026-10-13', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' }
+            ];
+
+            const existingPolNums = policies.map(p => p.policyNumber);
+            const polsToAdd = seedBdaPolicies.filter(p => !existingPolNums.includes(p.policyNumber));
+            if (polsToAdd.length > 0) {
+              const mergedPols = [...policies, ...polsToAdd];
+              setPolicies(mergedPols);
+              try { localStorage.setItem('bms_policies_v3', JSON.stringify(mergedPols)); } catch (e) {}
+            }
+          }
+        } catch (e) {
+          console.warn('BDA seeding error:', e);
+        }
+      }, [branchTeam, selectedTenant]);
 
       // Handle Delete Member
       // Helper: Get assigned agents for any manager
@@ -5183,6 +5957,23 @@
                       <span className="text-sm mr-2">🌟</span>
                       {!isSidebarCollapsed && <span className="flex-1 truncate">Agents</span>}
                       {!isSidebarCollapsed && <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">{agCount}</span>}
+                    </button>
+
+                    {/* 4b. BDA Activation Tracker (Last 6 Months Cohorts M0-M3) */}
+                    <button
+                      onClick={() => {
+                        setActiveTab('tenant_bda_activation');
+                      }}
+                      className={`sidebar-nav-btn ${activeTab === 'tenant_bda_activation' ? 'active' : ''}`}
+                      title="BDA Agency Code Generation & Activation Tracker (6 Months Cohorts M0-M3 & Rising Star Club)"
+                    >
+                      <span className="text-sm mr-2">🎯</span>
+                      {!isSidebarCollapsed && <span className="flex-1 truncate">BDA Activation (6M)</span>}
+                      {!isSidebarCollapsed && (
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                          M0-M3
+                        </span>
+                      )}
                     </button>
 
                     {/* 5. Renewals */}
@@ -7945,6 +8736,24 @@
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
+                        type="button"
+                        onClick={() => setShowAgentExcelImportModal(true)}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1.5 shadow-md transition-all"
+                        title="Upload Excel (.xlsx/.xls) or CSV to bulk create agents and update phone numbers"
+                      >
+                        <span>📥</span>
+                        <span>Bulk Upload Excel</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('tenant_bda_activation')}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center space-x-1.5 shadow-md transition-all"
+                        title="Track 6-Month BDA agency code generation, cohorts M0-M3 and Rising Star Club"
+                      >
+                        <span>🎯</span>
+                        <span>BDA Activation (6M)</span>
+                      </button>
+                      <button
                         onClick={() => handleOpenCreateMemberModal('AGENT')}
                         className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md flex items-center space-x-1"
                       >
@@ -8653,6 +9462,28 @@
                             >
                               <span>🎁</span>
                               <span>Promotional Extra Credit ({(promotionalCreditCampaigns || []).filter(c => c.status === 'Active' || !c.status).length})</span>
+                            </button>
+                          </>
+                        )}
+                        {effectiveTab === 'AGENTS' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setShowAgentExcelImportModal(true)}
+                              className="px-3 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1.5 transition-all shadow-sm"
+                              title="Upload Excel (.xlsx/.xls) or CSV to bulk create agents or update phone numbers"
+                            >
+                              <span>📥</span>
+                              <span>Bulk Upload Excel</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('tenant_bda_activation')}
+                              className="px-3 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center space-x-1.5 shadow-md shadow-emerald-900/30 transition-all"
+                              title="BDA Agency Code Generation & Activation Tracker (6 Months Cohorts M0-M3)"
+                            >
+                              <span>🎯</span>
+                              <span>BDA Activation (6M)</span>
                             </button>
                           </>
                         )}
@@ -9666,6 +10497,634 @@
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================== */}
+            {/* VIEW: 🎯 BDA AGENCY CODE GENERATION & ACTIVATION TRACKER (6M) */}
+            {/* Evaluates 6-Month Cohorts (M0..M3) against configurable hurdle (₹15k) */}
+            {/* Achievers qualify for "Rising Star Club" recognition */}
+            {/* ====================================================== */}
+            {activeTab === 'tenant_bda_activation' && (
+              <div className="space-y-6 animate-fadeIn pb-12">
+                {/* 1. Header Banner */}
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xl">🎯</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                        Agency Activation Intelligence & Cohort Tracking
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-black text-white mt-1 flex items-center space-x-2">
+                      <span>BDA Agency Code Generation & Activation Tracker (Last 6 Months)</span>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Monitor newly coded agency codes across cohorts <strong className="text-emerald-400 font-mono">M0, M1, M2 & M3</strong> • Minimum Activation Hurdle: <strong className="text-amber-400 font-mono">₹{bdaActivationHurdle.toLocaleString('en-IN')}</strong> • Qualifiers earn <strong className="text-purple-400">🌟 Rising Star Club</strong> recognition.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentExcelImportModal(true)}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1.5 shadow transition-all"
+                      title="Upload Excel or CSV to bulk import agents or update phone numbers"
+                    >
+                      <span>📥</span>
+                      <span>Bulk Upload Excel / CSV</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCreateMemberModal('AGENT')}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center space-x-1.5 shadow-md shadow-emerald-950/40 transition-all"
+                    >
+                      <span>🌟</span>
+                      <span>+ Create BDA Agent</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('tenant_agents')}
+                      className="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+                    >
+                      ← Agents Directory
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Top Summary KPI Cards (5 Cards) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  {/* Total Codes Generated (6M) */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm hover:border-slate-700 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400 text-xs">
+                      <span>Total BDA Codes (6M)</span>
+                      <span className="text-base">📋</span>
+                    </div>
+                    <div className="text-2xl font-black text-white mt-2 font-mono">
+                      {bdaCohortData.totalCodesGenerated}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+                      <span>May 2026 – Oct 2026</span>
+                      <span className="text-emerald-400 font-bold font-mono">6 Cohorts</span>
+                    </div>
+                  </div>
+
+                  {/* Total Activated (>= Hurdle) */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm hover:border-emerald-500/40 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400 text-xs">
+                      <span>Activated (≥ Hurdle)</span>
+                      <span className="text-base">🚀</span>
+                    </div>
+                    <div className="text-2xl font-black text-emerald-400 mt-2 font-mono">
+                      {bdaCohortData.grandTotalActivated}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+                      <span>Overall Activation Rate</span>
+                      <span className="text-emerald-300 font-bold font-mono">{bdaCohortData.overallActivationRate}%</span>
+                    </div>
+                  </div>
+
+                  {/* Rising Star Club Qualifiers */}
+                  <div className="bg-gradient-to-br from-purple-950/40 to-slate-900 border border-purple-500/30 p-4 rounded-2xl shadow-sm hover:border-purple-500/50 transition-colors">
+                    <div className="flex items-center justify-between text-purple-300 text-xs font-semibold">
+                      <span>Rising Star Club</span>
+                      <span className="text-base">🌟</span>
+                    </div>
+                    <div className="text-2xl font-black text-purple-300 mt-2 font-mono">
+                      {bdaCohortData.grandTotalRisingStar} <span className="text-xs text-purple-400 font-normal">Advisors</span>
+                    </div>
+                    <div className="text-[11px] text-purple-400/80 mt-1 flex items-center justify-between">
+                      <span>Qualification: ≥ ₹{bdaActivationHurdle.toLocaleString('en-IN')}</span>
+                      <span className="bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-bold text-[10px]">Club Qualified</span>
+                    </div>
+                  </div>
+
+                  {/* M0 Fast-Starter Activations */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm hover:border-sky-500/40 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400 text-xs">
+                      <span>M0 Fast-Starters</span>
+                      <span className="text-base">⚡</span>
+                    </div>
+                    <div className="text-2xl font-black text-sky-400 mt-2 font-mono">
+                      {bdaCohortData.totalM0Active}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+                      <span>Activated in Joining Month</span>
+                      <span className="text-sky-300 font-mono font-bold">M0 Phase</span>
+                    </div>
+                  </div>
+
+                  {/* Configurable Activation Hurdle Card */}
+                  <div className="bg-slate-900 border border-amber-500/30 p-4 rounded-2xl shadow-sm hover:border-amber-500/50 transition-colors">
+                    <div className="flex items-center justify-between text-amber-300 text-xs font-semibold">
+                      <span>Activation Hurdle</span>
+                      <span className="text-base">⚙️</span>
+                    </div>
+
+                    {!isEditingBdaHurdle ? (
+                      <>
+                        <div className="text-2xl font-black text-amber-400 mt-2 font-mono">
+                          ₹{bdaActivationHurdle.toLocaleString('en-IN')}
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Min. qualification</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBdaHurdleInput(bdaActivationHurdle);
+                              setIsEditingBdaHurdle(true);
+                            }}
+                            className="text-amber-400 hover:text-amber-300 font-bold underline text-[11px]"
+                          >
+                            ✏️ Edit Hurdle
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-2 space-y-1.5">
+                        <input
+                          type="number"
+                          step="1000"
+                          value={bdaHurdleInput}
+                          onChange={(e) => setBdaHurdleInput(e.target.value)}
+                          className="w-full bg-slate-950 border border-amber-500 rounded-lg p-1.5 text-xs text-white font-mono font-bold"
+                          placeholder="e.g. 15000"
+                        />
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveBdaHurdle(bdaHurdleInput)}
+                            className="flex-1 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-[10px] font-bold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingBdaHurdle(false)}
+                            className="py-1 px-2 bg-slate-800 text-slate-300 rounded text-[10px]"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. 6-Month Cohort Performance Matrix Table (M0, M1, M2, M3) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                  <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <h3 className="font-bold text-white text-sm flex items-center space-x-2">
+                        <span>📊</span>
+                        <span>6-Month Cohort Activation Matrix (M0, M1, M2 & M3 Rolling Cycles)</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Cohorts grouped by recruitment month • M0 = joining month, M1 = month+1, M2 = month+2, M3 = month+3 • Hurdle: ≥ ₹{bdaActivationHurdle.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2 text-[11px]">
+                      <span className="flex items-center space-x-1 text-slate-400">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        <span>Active ≥ Hurdle</span>
+                      </span>
+                      <span className="flex items-center space-x-1 text-slate-400">
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
+                        <span>Rising Star Qualifier</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-3 font-semibold">Cohort Month</th>
+                          <th className="p-3 text-center font-semibold">Codes Generated</th>
+                          <th className="p-3 text-center font-semibold bg-emerald-950/20 text-emerald-300">
+                            M0 Active (Recruitment Month)
+                          </th>
+                          <th className="p-3 text-center font-semibold bg-sky-950/20 text-sky-300">
+                            M1 Active (Month + 1)
+                          </th>
+                          <th className="p-3 text-center font-semibold bg-indigo-950/20 text-indigo-300">
+                            M2 Active (Month + 2)
+                          </th>
+                          <th className="p-3 text-center font-semibold bg-teal-950/20 text-teal-300">
+                            M3 Active (Month + 3)
+                          </th>
+                          <th className="p-3 text-center font-semibold text-emerald-400">
+                            Total Activated (≥ Hurdle)
+                          </th>
+                          <th className="p-3 text-center font-semibold">Activation %</th>
+                          <th className="p-3 text-center font-semibold text-purple-300 bg-purple-950/20">
+                            🌟 Rising Star Qualifiers
+                          </th>
+                          <th className="p-3 text-right font-semibold">Total Premium Volume</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {bdaCohortData.cohortRows.map((cohort) => {
+                          const isCurrent = cohort.cohortKey === '2026-10';
+                          return (
+                            <tr
+                              key={cohort.cohortKey}
+                              className={`hover:bg-slate-800/40 transition-colors ${isCurrent ? 'bg-emerald-950/10' : ''}`}
+                            >
+                              {/* Cohort Month */}
+                              <td className="p-3">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`}></span>
+                                  <div>
+                                    <strong className="text-white block font-semibold">{cohort.short}</strong>
+                                    <span className="text-[10px] text-slate-500 font-mono">Cohort {cohort.tag}</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Codes Generated */}
+                              <td className="p-3 text-center">
+                                <span className="font-mono font-bold text-slate-200 text-sm bg-slate-800/60 px-2 py-0.5 rounded-lg">
+                                  {cohort.codesGenerated}
+                                </span>
+                              </td>
+
+                              {/* M0 Active */}
+                              <td className="p-3 text-center bg-emerald-950/10">
+                                <div>
+                                  <span className="font-mono font-bold text-emerald-400">
+                                    {cohort.m0ActiveCount} / {cohort.codesGenerated}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    {cohort.codesGenerated > 0 ? ((cohort.m0ActiveCount / cohort.codesGenerated) * 100).toFixed(0) : 0}% • ₹{cohort.m0Volume.toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* M1 Active */}
+                              <td className="p-3 text-center bg-sky-950/10">
+                                {cohort.cohortKey === '2026-10' ? (
+                                  <span className="text-[11px] text-slate-500 italic">⏳ Next Month</span>
+                                ) : (
+                                  <div>
+                                    <span className="font-mono font-bold text-sky-400">
+                                      {cohort.m1ActiveCount} / {cohort.codesGenerated}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      {cohort.codesGenerated > 0 ? ((cohort.m1ActiveCount / cohort.codesGenerated) * 100).toFixed(0) : 0}% • ₹{cohort.m1Volume.toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* M2 Active */}
+                              <td className="p-3 text-center bg-indigo-950/10">
+                                {cohort.cohortKey >= '2026-09' ? (
+                                  <span className="text-[11px] text-slate-500 italic">⏳ In Progress</span>
+                                ) : (
+                                  <div>
+                                    <span className="font-mono font-bold text-indigo-400">
+                                      {cohort.m2ActiveCount} / {cohort.codesGenerated}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      {cohort.codesGenerated > 0 ? ((cohort.m2ActiveCount / cohort.codesGenerated) * 100).toFixed(0) : 0}% • ₹{cohort.m2Volume.toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* M3 Active */}
+                              <td className="p-3 text-center bg-teal-950/10">
+                                {cohort.cohortKey >= '2026-08' ? (
+                                  <span className="text-[11px] text-slate-500 italic">⏳ In Progress</span>
+                                ) : (
+                                  <div>
+                                    <span className="font-mono font-bold text-teal-400">
+                                      {cohort.m3ActiveCount} / {cohort.codesGenerated}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      {cohort.codesGenerated > 0 ? ((cohort.m3ActiveCount / cohort.codesGenerated) * 100).toFixed(0) : 0}% • ₹{cohort.m3Volume.toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Total Activated */}
+                              <td className="p-3 text-center">
+                                <span className="font-mono font-bold text-emerald-400 text-sm">
+                                  {cohort.totalActivated}
+                                </span>
+                              </td>
+
+                              {/* Activation % */}
+                              <td className="p-3 text-center">
+                                <div className="flex items-center justify-center space-x-1.5">
+                                  <span className="font-mono font-bold text-slate-200">
+                                    {cohort.activationRate}%
+                                  </span>
+                                  <div className="w-12 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className="bg-emerald-500 h-1.5 rounded-full"
+                                      style={{ width: `${Math.min(100, Number(cohort.activationRate)) || 0}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Rising Star Qualifiers */}
+                              <td className="p-3 text-center bg-purple-950/10">
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 font-bold font-mono">
+                                  <span>🌟</span>
+                                  <span>{cohort.risingStarCount}</span>
+                                </span>
+                              </td>
+
+                              {/* Total Cohort Premium */}
+                              <td className="p-3 text-right">
+                                <span className="font-mono font-bold text-white text-xs">
+                                  ₹{cohort.totalCohortPremium.toLocaleString('en-IN')}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {/* Summary Grand Total Row */}
+                      <tfoot className="bg-slate-950 font-bold text-slate-300 border-t-2 border-slate-700">
+                        <tr>
+                          <td className="p-3 font-black text-white">GRAND TOTAL (6M)</td>
+                          <td className="p-3 text-center font-mono font-black text-amber-400">
+                            {bdaCohortData.totalCodesGenerated}
+                          </td>
+                          <td className="p-3 text-center font-mono text-emerald-400">
+                            {bdaCohortData.totalM0Active} Active
+                          </td>
+                          <td className="p-3 text-center font-mono text-sky-400">
+                            {bdaCohortData.totalM1Active} Active
+                          </td>
+                          <td className="p-3 text-center font-mono text-indigo-400">
+                            {bdaCohortData.totalM2Active} Active
+                          </td>
+                          <td className="p-3 text-center font-mono text-teal-400">
+                            {bdaCohortData.totalM3Active} Active
+                          </td>
+                          <td className="p-3 text-center font-mono font-black text-emerald-400">
+                            {bdaCohortData.grandTotalActivated}
+                          </td>
+                          <td className="p-3 text-center font-mono text-emerald-300 font-black">
+                            {bdaCohortData.overallActivationRate}%
+                          </td>
+                          <td className="p-3 text-center font-mono text-purple-300 font-black">
+                            🌟 {bdaCohortData.grandTotalRisingStar}
+                          </td>
+                          <td className="p-3 text-right font-mono text-emerald-400 font-black text-sm">
+                            ₹{bdaCohortData.grandTotalVolume.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 4. Detailed BDA Advisor Roster & Club Tracker */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                  {/* Roster Controls & Filters */}
+                  <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <h3 className="font-bold text-white text-sm flex items-center space-x-2">
+                        <span>👥</span>
+                        <span>Newly Coded Advisors & Rising Star Roster</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Showing <strong className="text-white font-mono">{filteredBdaAgentsList.length}</strong> of <strong className="text-white font-mono">{bdaCohortData.enrichedAgents.length}</strong> BDA Advisors
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={bdaSearchQuery}
+                          onChange={(e) => setBdaSearchQuery(e.target.value)}
+                          placeholder="Search code, name, phone..."
+                          className="w-48 sm:w-56 bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                        />
+                        <span className="absolute left-2.5 top-2 text-slate-500 text-xs">🔍</span>
+                      </div>
+
+                      {/* Filter by Cohort Month */}
+                      <select
+                        value={bdaCohortMonthFilter}
+                        onChange={(e) => setBdaCohortMonthFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="ALL">All 6 Cohorts (May - Oct)</option>
+                        {bdaLast6CohortMonths.map(c => (
+                          <option key={c.key} value={c.key}>{c.short} ({c.tag})</option>
+                        ))}
+                      </select>
+
+                      {/* Filter by Activation Status */}
+                      <select
+                        value={bdaStatusFilter}
+                        onChange={(e) => setBdaStatusFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="ALL">All Statuses</option>
+                        <option value="RISING_STAR">🌟 Rising Star Qualifiers (≥ ₹{bdaActivationHurdle.toLocaleString('en-IN')})</option>
+                        <option value="M0_ACTIVE">⚡ M0 Active (Joining Month)</option>
+                        <option value="M1_ACTIVE">🚀 M1 Active (Month + 1)</option>
+                        <option value="PENDING">⏳ In Progress / Pending</option>
+                      </select>
+
+                      {/* Filter by Leader */}
+                      <select
+                        value={bdaLeaderFilter}
+                        onChange={(e) => setBdaLeaderFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="ALL">All Reporting Leaders</option>
+                        {currentTenantTeam.filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER').map(ldr => (
+                          <option key={ldr.id} value={ldr.id}>{ldr.name} ({ldr.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Advisor Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-3">Advisor & Agency Code</th>
+                          <th className="p-3">Phone & Contact</th>
+                          <th className="p-3">Reporting Superior</th>
+                          <th className="p-3">Joined Date & Cohort</th>
+                          <th className="p-3 text-center">M0 Business</th>
+                          <th className="p-3 text-center">M1 Business</th>
+                          <th className="p-3 text-center">M2 Business</th>
+                          <th className="p-3 text-center">M3 Business</th>
+                          <th className="p-3 text-right">Total Activation Vol.</th>
+                          <th className="p-3 text-center">Club & Qualification</th>
+                          <th className="p-3 text-center">Direct Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {filteredBdaAgentsList.length === 0 ? (
+                          <tr>
+                            <td colSpan="11" className="p-8 text-center text-slate-500">
+                              No advisors match the selected filters. Use "Bulk Upload Excel" to import agency codes.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBdaAgentsList.map((ag) => {
+                            const isRisingStar = ag.isRisingStarQualified;
+                            return (
+                              <tr key={ag.id} className="hover:bg-slate-800/40 transition-colors">
+                                {/* Name & Code */}
+                                <td className="p-3">
+                                  <div className="flex items-center space-x-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow">
+                                      {ag.name ? ag.name[0] : 'A'}
+                                    </div>
+                                    <div>
+                                      <strong className="text-white block font-semibold">{ag.name}</strong>
+                                      <span className="font-mono text-emerald-400 font-bold text-[11px] block">{ag.code}</span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Phone & Contact */}
+                                <td className="p-3">
+                                  <div className="space-y-0.5">
+                                    <a
+                                      href={`tel:${ag.phone}`}
+                                      className="font-mono text-slate-300 hover:text-emerald-400 font-semibold flex items-center space-x-1"
+                                      title="Click to dial"
+                                    >
+                                      <span>📞</span>
+                                      <span>{ag.phone || '—'}</span>
+                                    </a>
+                                    {ag.email && (
+                                      <span className="text-[10px] text-slate-500 block truncate max-w-[140px]" title={ag.email}>
+                                        {ag.email}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Reporting Superior */}
+                                <td className="p-3">
+                                  <div className="text-xs">
+                                    <span className="text-slate-200 block font-medium">
+                                      {ag.reportsToName || 'Branch Manager'}
+                                    </span>
+                                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${ag.reportsToRole === 'SALES_MANAGER' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                                      {ag.reportsToRole === 'SALES_MANAGER' ? '👔 FLS Manager' : '🤝 TSC Leader'}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Joined Date & Cohort */}
+                                <td className="p-3">
+                                  <div className="font-mono text-slate-300 text-xs">
+                                    <span>{ag.joinedDate || '—'}</span>
+                                    <span className="block text-[10px] text-amber-400 font-bold font-sans">
+                                      {ag.joinMonth} ({ag.joinMonth === '2026-10' ? 'M0' : ag.joinMonth === '2026-09' ? 'M1' : ag.joinMonth === '2026-08' ? 'M2' : ag.joinMonth === '2026-07' ? 'M3' : 'Alumni'})
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* M0 */}
+                                <td className="p-3 text-center">
+                                  <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${ag.isM0Active ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : ag.m0Premium > 0 ? 'bg-slate-800 text-slate-200' : 'text-slate-500'}`}>
+                                    ₹{ag.m0Premium.toLocaleString('en-IN')}
+                                  </span>
+                                </td>
+
+                                {/* M1 */}
+                                <td className="p-3 text-center">
+                                  {ag.joinMonth === '2026-10' ? (
+                                    <span className="text-[10px] text-slate-500 italic">—</span>
+                                  ) : (
+                                    <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${ag.isM1Active ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : ag.m1Premium > 0 ? 'bg-slate-800 text-slate-200' : 'text-slate-500'}`}>
+                                      ₹{ag.m1Premium.toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* M2 */}
+                                <td className="p-3 text-center">
+                                  {ag.joinMonth >= '2026-09' ? (
+                                    <span className="text-[10px] text-slate-500 italic">—</span>
+                                  ) : (
+                                    <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${ag.isM2Active ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : ag.m2Premium > 0 ? 'bg-slate-800 text-slate-200' : 'text-slate-500'}`}>
+                                      ₹{ag.m2Premium.toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* M3 */}
+                                <td className="p-3 text-center">
+                                  {ag.joinMonth >= '2026-08' ? (
+                                    <span className="text-[10px] text-slate-500 italic">—</span>
+                                  ) : (
+                                    <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${ag.isM3Active ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30' : ag.m3Premium > 0 ? 'bg-slate-800 text-slate-200' : 'text-slate-500'}`}>
+                                      ₹{ag.m3Premium.toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Total Activation Volume */}
+                                <td className="p-3 text-right">
+                                  <span className="font-mono font-bold text-white text-xs block">
+                                    ₹{ag.totalActivationPremium.toLocaleString('en-IN')}
+                                  </span>
+                                </td>
+
+                                {/* Club & Qualification */}
+                                <td className="p-3 text-center">
+                                  {isRisingStar ? (
+                                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-purple-200 border border-purple-500/50 text-[11px] font-bold shadow-sm">
+                                      <span>🌟</span>
+                                      <span>Rising Star Club</span>
+                                    </span>
+                                  ) : ag.totalActivationPremium > 0 ? (
+                                    <div className="text-center">
+                                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                                        In Progress
+                                      </span>
+                                      <span className="text-[9px] text-slate-500 block font-mono mt-0.5">
+                                        ₹{(bdaActivationHurdle - ag.totalActivationPremium).toLocaleString('en-IN')} to Star
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">
+                                      Pending Activation
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Direct Action */}
+                                <td className="p-3 text-center">
+                                  <a
+                                    href={`tel:${ag.phone}`}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] inline-flex items-center space-x-1 shadow transition-colors"
+                                    title="Call Advisor"
+                                  >
+                                    <span>📞</span>
+                                    <span>Call</span>
+                                  </a>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -12220,6 +13679,31 @@
                   {memberForm.role === 'AGENT' ? (
                     /* DEDICATED CLEAN & MINIMAL AGENT FORM (EXACTLY 6 FIELDS PER REQUIREMENTS) */
                     <>
+                      {/* BULK EXCEL UPLOADING FACILITY UNDER TSE & FLS AGENT CREATION */}
+                      <div className="bg-gradient-to-r from-emerald-950/70 via-teal-950/50 to-slate-900 border border-emerald-500/40 p-3 rounded-2xl flex items-center justify-between gap-3 shadow-md">
+                        <div className="flex items-center space-x-2.5">
+                          <span className="text-2xl">📥</span>
+                          <div>
+                            <span className="font-bold text-white text-xs block">
+                              Bulk Upload via Excel / CSV (TSE & FLS Hierarchy)
+                            </span>
+                            <span className="text-[11px] text-emerald-300">
+                              Auto-fetch & update needed fields like Phone Number, with interactive staging review!
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreateMemberModal(false);
+                            setShowAgentExcelImportModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center space-x-1 shadow transition-all shrink-0"
+                        >
+                          <span>📊 Upload Excel</span>
+                        </button>
+                      </div>
+
                       {/* 1. REPORTING TYPE (Two Options: TSC/DL vs FLS) */}
                       <div>
                         <label className="block text-slate-300 font-bold text-xs mb-1.5 uppercase tracking-wider">
@@ -12656,6 +14140,412 @@
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ====================================================== */}
+          {/* MODAL 1: 📥 BULK AGENT EXCEL / CSV UPLOAD SELECTOR     */}
+          {/* ====================================================== */}
+          {showAgentExcelImportModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
+                      📥
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-sm">Bulk Upload Agents (TSE & FLS Hierarchy)</h3>
+                      <p className="text-[11px] text-emerald-400 font-semibold">
+                        Auto-detects duplicates to update Phone Numbers & details before confirmation
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowAgentExcelImportModal(false)}
+                    className="text-slate-400 hover:text-white text-base"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Reporting Hierarchy Defaults */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-semibold text-xs mb-1">
+                        Default Hierarchy Segment
+                      </label>
+                      <select
+                        value={agentImportDefaultReportingType}
+                        onChange={(e) => setAgentImportDefaultReportingType(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
+                      >
+                        <option value="TSC">🤝 Territory Sales Executive (TSE / TSC)</option>
+                        <option value="FLS">👔 Direct Sales Manager (FLS)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold text-xs mb-1">
+                        Default Superior Leader
+                      </label>
+                      <select
+                        value={agentImportDefaultLeaderId}
+                        onChange={(e) => setAgentImportDefaultLeaderId(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
+                      >
+                        <option value="">Auto-Detect from File</option>
+                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                          .filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER')
+                          .map(ldr => (
+                            <option key={ldr.id} value={ldr.id}>
+                              {ldr.name} ({ldr.code}) — {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC'}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* File Upload Zone */}
+                  <div className="border-2 border-dashed border-emerald-500/40 hover:border-emerald-500/80 rounded-2xl p-6 text-center bg-emerald-950/10 transition-colors">
+                    <input
+                      type="file"
+                      id="agentExcelFileInput"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleAgentFileUpload}
+                      className="hidden"
+                    />
+                    <label htmlFor="agentExcelFileInput" className="cursor-pointer block space-y-2">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl shadow">
+                        📊
+                      </div>
+                      <div className="text-sm font-bold text-white">
+                        Click to select Excel (.xlsx, .xls) or CSV
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        Supports columns: Agent Code, Full Name, Phone Number, Email, Reporting Type, Assigned Leader, Coding Date
+                      </p>
+                    </label>
+                  </div>
+
+                  {/* Smart Update Feature Explanation */}
+                  <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-300 space-y-1">
+                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-xs">
+                      <span>💡</span>
+                      <span>Smart Phone & Profile Update Facility:</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      If an uploaded Agent Code matches an existing advisor in the portal, it will automatically stage as an <strong>UPDATE</strong> with their new Phone Number. You will be able to review and edit all fields in the Staging View before anything is added to the portal database!
+                    </p>
+                  </div>
+
+                  {/* Download Template & Cancel Buttons */}
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={handleDownloadAgentTemplate}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center space-x-1.5 transition-colors"
+                    >
+                      <span>⬇️</span>
+                      <span>Download Sample CSV Template</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentExcelImportModal(false)}
+                      className="px-4 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl font-bold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ====================================================== */}
+          {/* MODAL 2: 📋 SEPARATE EDITABLE STAGING REVIEW VIEW     */}
+          {/* Lists parsed agents with inline editable fields (Phone, Code, Name, etc.) */}
+          {/* User can review, edit and click "Confirm & Add Directly to Portal" */}
+          {/* ====================================================== */}
+          {showAgentImportStagingModal && (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-6xl w-full text-xs text-slate-200 shadow-2xl animate-fadeIn max-h-[94vh] flex flex-col overflow-hidden">
+                {/* 1. Staging Modal Header */}
+                <div className="p-4 sm:p-5 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
+                      📋
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base flex items-center space-x-2">
+                        <span>Agent Import & Phone Update Staging Review</span>
+                        <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono font-normal">
+                          {agentImportFileName}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        Review all records below. You can edit any field (e.g. Phone Number, Code, Leader) inline. Click Confirm to apply directly to the portal database.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Summary Badges */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 font-mono font-bold text-xs">
+                      Total: {agentImportStagingRows.length}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold text-xs">
+                      + {agentImportStagingRows.filter(r => r.action === 'NEW').length} New Agents
+                    </span>
+                    <span className="px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono font-bold text-xs">
+                      ↻ {agentImportStagingRows.filter(r => r.action === 'UPDATE').length} Updates
+                    </span>
+                    <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold text-xs">
+                      📞 {agentImportStagingRows.filter(r => r.phoneChanged).length} Phone Changes
+                    </span>
+                    <button
+                      onClick={() => setShowAgentImportStagingModal(false)}
+                      className="text-slate-400 hover:text-white p-1 ml-2 text-base"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Staging Filters & Action Bar */}
+                <div className="p-3 bg-slate-950/60 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAgentImportStatusFilter('ALL')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'ALL' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    >
+                      All Records ({agentImportStagingRows.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgentImportStatusFilter('NEW')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'NEW' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    >
+                      New Agents Only ({agentImportStagingRows.filter(r => r.action === 'NEW').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgentImportStatusFilter('UPDATE')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'UPDATE' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    >
+                      Updates Only ({agentImportStagingRows.filter(r => r.action === 'UPDATE').length})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={agentImportSearch}
+                      onChange={(e) => setAgentImportSearch(e.target.value)}
+                      placeholder="Search staged rows..."
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-44 sm:w-52"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddStagedRowManual}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg font-bold text-xs flex items-center space-x-1"
+                    >
+                      <span>➕</span>
+                      <span>Add Row</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Interactive Staging Table with Inline Inputs */}
+                <div className="flex-1 overflow-y-auto overflow-x-auto p-2">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-950 text-slate-400 sticky top-0 z-10 border-b border-slate-800">
+                      <tr>
+                        <th className="p-2.5">Action</th>
+                        <th className="p-2.5 min-w-[110px]">Agent Code *</th>
+                        <th className="p-2.5 min-w-[150px]">Full Name *</th>
+                        <th className="p-2.5 min-w-[150px]">Phone Number *</th>
+                        <th className="p-2.5 min-w-[160px]">Email Address</th>
+                        <th className="p-2.5 min-w-[120px]">Reporting Type</th>
+                        <th className="p-2.5 min-w-[180px]">Assigned Leader</th>
+                        <th className="p-2.5 min-w-[120px]">Joining Date</th>
+                        <th className="p-2.5 text-center">Remove</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {agentImportStagingRows
+                        .filter(row => {
+                          if (agentImportStatusFilter === 'NEW' && row.action !== 'NEW') return false;
+                          if (agentImportStatusFilter === 'UPDATE' && row.action !== 'UPDATE') return false;
+                          if (agentImportSearch.trim()) {
+                            const q = agentImportSearch.toLowerCase().trim();
+                            return (
+                              (row.code || '').toLowerCase().includes(q) ||
+                              (row.name || '').toLowerCase().includes(q) ||
+                              (row.phone || '').toLowerCase().includes(q) ||
+                              (row.reportsToName || '').toLowerCase().includes(q)
+                            );
+                          }
+                          return true;
+                        })
+                        .map((row) => {
+                          const isUpdate = row.action === 'UPDATE';
+                          return (
+                            <tr
+                              key={row.tempId}
+                              className={`hover:bg-slate-800/50 transition-colors ${isUpdate ? 'bg-indigo-950/10' : 'bg-emerald-950/10'}`}
+                            >
+                              {/* Action Badge */}
+                              <td className="p-2.5 whitespace-nowrap">
+                                {isUpdate ? (
+                                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px] border border-indigo-500/30">
+                                    <span>↻ UPDATE</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">
+                                    <span>+ NEW</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Agent Code (Editable) */}
+                              <td className="p-2.5">
+                                <input
+                                  type="text"
+                                  value={row.code}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'code', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500"
+                                />
+                              </td>
+
+                              {/* Full Name (Editable) */}
+                              <td className="p-2.5">
+                                <input
+                                  type="text"
+                                  value={row.name}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'name', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
+                                />
+                              </td>
+
+                              {/* Phone Number (Editable with Old Phone badge) */}
+                              <td className="p-2.5">
+                                <div>
+                                  <input
+                                    type="tel"
+                                    value={row.phone}
+                                    onChange={(e) => handleUpdateStagedRow(row.tempId, 'phone', e.target.value)}
+                                    className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-mono focus:border-emerald-500 ${row.phoneChanged ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-slate-700'}`}
+                                  />
+                                  {row.phoneChanged && (
+                                    <span className="text-[10px] text-amber-400 font-mono block mt-0.5">
+                                      Prev: {row.oldPhone}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Email (Editable) */}
+                              <td className="p-2.5">
+                                <input
+                                  type="email"
+                                  value={row.email}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'email', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                  placeholder="advisor@..."
+                                />
+                              </td>
+
+                              {/* Reporting Type (Select) */}
+                              <td className="p-2.5">
+                                <select
+                                  value={row.reportingType}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'reportingType', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                >
+                                  <option value="TSC">🤝 TSC Leader</option>
+                                  <option value="FLS">👔 Direct Sales (FLS)</option>
+                                </select>
+                              </td>
+
+                              {/* Assigned Leader (Select) */}
+                              <td className="p-2.5">
+                                <select
+                                  value={row.reportsToId}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'reportsToId', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                >
+                                  <option value="">Select Superior Leader...</option>
+                                  {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                                    .filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER')
+                                    .map(ldr => (
+                                      <option key={ldr.id} value={ldr.id}>
+                                        {ldr.name} ({ldr.code}) — {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC'}
+                                      </option>
+                                    ))}
+                                </select>
+                              </td>
+
+                              {/* Joining Date (Editable) */}
+                              <td className="p-2.5">
+                                <input
+                                  type="date"
+                                  value={row.joinedDate}
+                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'joinedDate', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                />
+                              </td>
+
+                              {/* Remove Row */}
+                              <td className="p-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStagedRow(row.tempId)}
+                                  className="text-rose-400 hover:text-rose-300 font-bold p-1 transition-colors"
+                                  title="Remove from staging"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 4. Footer with Confirmation Buttons */}
+                <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                  <div className="text-xs text-slate-400">
+                    Ready to sync <strong className="text-white font-mono">{agentImportStagingRows.length} records</strong> directly to the portal roster.
+                  </div>
+
+                  <div className="flex items-center space-x-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAgentImportStagingModal(false);
+                        setAgentImportStagingRows([]);
+                      }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors"
+                    >
+                      Discard & Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleConfirmBulkAgentImport}
+                      className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/50 flex items-center space-x-1.5 transition-all"
+                    >
+                      <span>✓</span>
+                      <span>Confirm & Directly Add to Portal ({agentImportStagingRows.length} Records)</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
