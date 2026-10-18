@@ -734,49 +734,51 @@
         });
       };
 
-      const [currentUser, setCurrentUser] = useState(() => {
-        try {
-          const sessionStr = localStorage.getItem('bms_auth_session_v3');
-          if (!sessionStr) return null;
-          const session = JSON.parse(sessionStr);
-          const savedUsersStr = localStorage.getItem('bms_users_v5');
-          const userList = savedUsersStr ? JSON.parse(savedUsersStr) : INITIAL_USERS;
-          const found = userList.find(u => 
-            (u.userId.toLowerCase() === (session.userId || '').toLowerCase() || 
-             (u.role === 'SUPER_ADMIN' && (session.userId === 'superadmin' || session.userId === 'arunarumaliljoy@gmail.com'))) && 
-            u.status === 'Active'
-          );
-          return found || null;
-        } catch (e) {
-          return null;
-        }
-      });
-
-      const [isLoggedIn, setIsLoggedIn] = useState(() => {
-        try {
-          const sessionStr = localStorage.getItem('bms_auth_session_v3');
-          if (!sessionStr) return false;
-          const session = JSON.parse(sessionStr);
-          const savedUsersStr = localStorage.getItem('bms_users_v5');
-          const userList = savedUsersStr ? JSON.parse(savedUsersStr) : INITIAL_USERS;
-          const found = userList.find(u => 
-            (u.userId.toLowerCase() === (session.userId || '').toLowerCase() || 
-             (u.role === 'SUPER_ADMIN' && (session.userId === 'superadmin' || session.userId === 'arunarumaliljoy@gmail.com'))) && 
-            u.status === 'Active'
-          );
-          return !!found;
-        } catch(e) {
-          return false;
-        }
-      });
+      // ========================================================
+      // MAXIMUM ENTERPRISE SECURITY & ACCESS CONTROL ENGINE
+      // ========================================================
+      // 1. Initial auth state strictly starts as null / false on load or reload.
+      // 2. Direct page URL entry / deep linking without login is strictly prohibited.
+      // 3. Inactivity timeout terminates session after 5 minutes of no user interaction.
+      // 4. Brute force defense locks login after 5 consecutive failed attempts.
+      const [currentUser, setCurrentUser] = useState(null);
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
 
       // Login Form State
-      const [loginInputUserId, setLoginInputUserId] = useState('');
+      const [loginInputUserId, setLoginInputUserId] = useState(() => {
+        try {
+          return localStorage.getItem('bms_remembered_userId_v1') || '';
+        } catch(e) {
+          return '';
+        }
+      });
       const [loginInputPassword, setLoginInputPassword] = useState('');
       const [loginShowPassword, setLoginShowPassword] = useState(false);
-      const [loginError, setLoginError] = useState('');
+      const [loginError, setLoginError] = useState(() => {
+        try {
+          if (window.location.hash && window.location.hash !== '#' && window.location.hash !== '#login') {
+            return '⛔ Access Denied: Direct page URL access is blocked without authentication. Please log in first.';
+          }
+          const remembered = localStorage.getItem('bms_remembered_userId_v1');
+          if (remembered) {
+            return '🔒 Security Protection: Credentials required. Please enter your password to access the portal.';
+          }
+        } catch(e) {}
+        return '';
+      });
       const [loginSuccessMsg, setLoginSuccessMsg] = useState('');
       const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+      // Brute Force Defense State
+      const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
+      const [lockoutCountdown, setLockoutCountdown] = useState(0);
+
+      // 5-Minute Inactivity Protection State
+      const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+      const INACTIVITY_WARNING_MS = 30 * 1000;     // 30 seconds before timeout
+      const lastActivityTimeRef = useRef(Date.now());
+      const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+      const [inactivityCountdown, setInactivityCountdown] = useState(30);
 
       // Forgot Password Modal
       const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
@@ -4693,8 +4695,12 @@
 
       // Direct Navigation Connection to any portal and tab
       const navigateTo = (mode, tab) => {
+        if (!isLoggedIn || !currentUser) {
+          showToast('⛔ Access Denied: Please log in with valid credentials.', 'error');
+          return;
+        }
         // Enforce Super Admin credential restriction
-        if (mode === 'SUPER_ADMIN' && (!currentUser || currentUser.role !== 'SUPER_ADMIN')) {
+        if (mode === 'SUPER_ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
           showToast('⛔ Access Denied: Commercial Admin requires Super Admin credentials!', 'error');
           return;
         }
@@ -4707,6 +4713,11 @@
       // Handle Login Form Submit
       const handleLoginFormSubmit = (e) => {
         e.preventDefault();
+        if (lockoutCountdown > 0) {
+          setLoginError(`⛔ Security Lockout: Too many failed login attempts. Please wait ${lockoutCountdown} seconds before trying again.`);
+          return;
+        }
+
         setLoginError('');
         setIsLoggingIn(true);
 
@@ -4718,18 +4729,28 @@
             (u.role === 'SUPER_ADMIN' && (trimmed === 'superadmin' || trimmed === 'arunarumaliljoy@gmail.com'))
           );
 
-          if (!target) {
-            setLoginError('Invalid User ID or Password. Please check your credentials.');
+          const recordLoginFailure = (errMsg, logDetail) => {
+            const nextFailed = failedLoginAttempts + 1;
+            setFailedLoginAttempts(nextFailed);
+            if (nextFailed >= 5) {
+              setLockoutCountdown(60);
+              setLoginError('⛔ Security Lockout: 5 consecutive failed login attempts detected. Login is locked for 60 seconds.');
+              logAuditEvent('BRUTE_FORCE_LOCKOUT', trimmed || 'UNKNOWN', '5 failed login attempts - 60s security lockout triggered');
+            } else {
+              setLoginError(`${errMsg} (${5 - nextFailed} attempt(s) remaining before security lockout)`);
+              logAuditEvent('LOGIN_FAILED', trimmed || 'UNKNOWN', logDetail);
+            }
             setIsLoggingIn(false);
-            logAuditEvent('LOGIN_FAILED', trimmed, 'User ID not found');
+          };
+
+          if (!target) {
+            recordLoginFailure('Invalid User ID or Password. Please check your credentials.', 'User ID not found');
             return;
           }
 
           const isSuperAdminPasswordMatch = (target.role === 'SUPER_ADMIN' && loginInputPassword === 'password');
           if (!isSuperAdminPasswordMatch && !verifyPassword(loginInputPassword, target.passwordHash, target.salt)) {
-            setLoginError('Invalid User ID or Password. Please check your credentials.');
-            setIsLoggingIn(false);
-            logAuditEvent('LOGIN_FAILED', target.userId, 'Invalid password');
+            recordLoginFailure('Invalid User ID or Password. Please check your credentials.', `Invalid password for @${target.userId}`);
             return;
           }
 
@@ -4740,6 +4761,16 @@
             return;
           }
 
+          // Login successful - reset lockout and failed attempts
+          setFailedLoginAttempts(0);
+          setLockoutCountdown(0);
+          lastActivityTimeRef.current = Date.now();
+          try {
+            localStorage.setItem('bms_remembered_userId_v1', target.userId);
+            // Clear persistent auto-login token so reload strictly requires credentials
+            localStorage.removeItem('bms_auth_session_v3');
+          } catch(e) {}
+
           // If mustChangePassword was set from an admin reset, auto-clear it so login is never blocked
           let userToLogin = target;
           if (target.mustChangePassword) {
@@ -4749,14 +4780,15 @@
             try { localStorage.setItem('bms_users_v5', JSON.stringify(updatedUsers)); } catch(e) {}
           }
 
-          // Complete login
+          // Complete login with session in sessionStorage (isolated to current active window)
           const sessionObj = {
             userId: userToLogin.userId,
             token: 'bms_token_' + Date.now() + '_' + userToLogin.id,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            lastActivity: Date.now()
           };
           try {
-            localStorage.setItem('bms_auth_session_v3', JSON.stringify(sessionObj));
+            sessionStorage.setItem('bms_auth_session_v3', JSON.stringify(sessionObj));
           } catch(err) {}
 
           setCurrentUser(userToLogin);
@@ -4774,36 +4806,164 @@
           if (userToLogin.role === 'SUPER_ADMIN') {
             setViewMode('SUPER_ADMIN');
             setActiveTab('tenants');
+            try { window.location.hash = '#tenants'; } catch(e) {}
           } else if (userToLogin.role === 'BRANCH_MANAGER') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('tenant_dashboard');
+            try { window.location.hash = '#tenant_dashboard'; } catch(e) {}
           } else if (userToLogin.role === 'SALES_MANAGER') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('fls_dashboard');
+            try { window.location.hash = '#fls_dashboard'; } catch(e) {}
           } else if (userToLogin.role === 'TSE') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('tse_dashboard');
+            try { window.location.hash = '#tse_dashboard'; } catch(e) {}
           } else if (userToLogin.role === 'AGENT') {
             setViewMode('TENANT_WORKSPACE');
             setActiveTab('agent_dashboard');
+            try { window.location.hash = '#agent_dashboard'; } catch(e) {}
           }
           showToast(`Welcome back, ${userToLogin.name}!`);
         }, 200);
       };
 
+      // Automatic Inactivity Timeout Handler (5 Minutes)
+      const handleInactivityTimeout = () => {
+        try {
+          sessionStorage.removeItem('bms_auth_session_v3');
+          localStorage.removeItem('bms_auth_session_v3');
+        } catch(e) {}
+        const user = currentUser;
+        setCurrentUser(null);
+        setIsLoggedIn(false);
+        setLoginInputPassword('');
+        setSelectedTenant(null);
+        setShowInactivityWarning(false);
+        try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
+
+        if (user) {
+          logAuditEvent('SESSION_TIMEOUT_5MIN_INACTIVITY', user.userId, 'User session terminated automatically due to 5 minutes of inactivity');
+        }
+
+        setLoginError('🔒 Security Timeout: Your session was automatically terminated after 5 minutes of inactivity to protect sensitive customer & policy data. Please re-enter your credentials to sign in.');
+        showToast('Session locked after 5 minutes of inactivity', 'error');
+      };
+
       const handleLogout = () => {
         try {
+          sessionStorage.removeItem('bms_auth_session_v3');
           localStorage.removeItem('bms_auth_session_v3');
         } catch(e) {}
         if (currentUser) {
-          logAuditEvent('LOGOUT', currentUser.userId, 'User signed out');
+          logAuditEvent('LOGOUT', currentUser.userId, 'User signed out securely');
         }
         setCurrentUser(null);
         setIsLoggedIn(false);
         setLoginInputPassword('');
         setLoginError('');
+        setSelectedTenant(null);
+        setShowInactivityWarning(false);
+        try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
         showToast('You have been securely signed out.');
       };
+
+      // Brute Force Lockout Countdown Effect
+      useEffect(() => {
+        if (lockoutCountdown <= 0) return;
+        const interval = setInterval(() => {
+          setLockoutCountdown(prev => {
+            if (prev <= 1) {
+              setLoginError('');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [lockoutCountdown]);
+
+      // 5-Minute Inactivity Protection Engine
+      useEffect(() => {
+        if (!isLoggedIn || !currentUser) {
+          setShowInactivityWarning(false);
+          return;
+        }
+
+        const handleUserActivity = () => {
+          lastActivityTimeRef.current = Date.now();
+          if (showInactivityWarning) {
+            setShowInactivityWarning(false);
+            setInactivityCountdown(30);
+          }
+        };
+
+        const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
+        activityEvents.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+        const inactivityChecker = setInterval(() => {
+          const idleMs = Date.now() - lastActivityTimeRef.current;
+
+          if (idleMs >= INACTIVITY_TIMEOUT_MS) {
+            clearInterval(inactivityChecker);
+            setShowInactivityWarning(false);
+            handleInactivityTimeout();
+          } else if (idleMs >= (INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS)) {
+            const remaining = Math.max(1, Math.ceil((INACTIVITY_TIMEOUT_MS - idleMs) / 1000));
+            setInactivityCountdown(remaining);
+            setShowInactivityWarning(true);
+          } else {
+            if (showInactivityWarning) {
+              setShowInactivityWarning(false);
+              setInactivityCountdown(30);
+            }
+          }
+        }, 1000);
+
+        return () => {
+          activityEvents.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+          clearInterval(inactivityChecker);
+        };
+      }, [isLoggedIn, currentUser, showInactivityWarning]);
+
+      // Direct URL Access Guard & Route Protection
+      useEffect(() => {
+        const sanitizeAndProtectRoute = () => {
+          if (!isLoggedIn || !currentUser) {
+            // Block and strip any deep-link hash or search parameters when unauthenticated
+            if (window.location.hash && window.location.hash !== '#' && window.location.hash !== '#login') {
+              const blockedRoute = window.location.hash;
+              try {
+                window.history.replaceState(null, '', window.location.pathname);
+              } catch(e) {
+                window.location.hash = '';
+              }
+              setLoginError(`⛔ Access Denied: Direct page URL access to "${blockedRoute}" is strictly blocked without authentication. Please enter your credentials.`);
+              logAuditEvent('UNAUTHORIZED_URL_ACCESS_BLOCKED', 'ANONYMOUS', `Blocked unauthorized direct URL access: ${blockedRoute}`);
+            }
+          } else {
+            // When authenticated, enforce role-based route access
+            const hash = (window.location.hash || '').replace('#', '');
+            if (hash) {
+              const superAdminTabs = ['tenants', 'commercial_billing', 'system_audit', 'user_management'];
+              if (superAdminTabs.includes(hash) && currentUser.role !== 'SUPER_ADMIN') {
+                showToast('⛔ Access Denied: You do not have permission to view that section.', 'error');
+                logAuditEvent('UNAUTHORIZED_TAB_ACCESS_BLOCKED', currentUser.userId, `Access denied for tab: ${hash}`);
+                window.history.replaceState(null, '', window.location.pathname);
+                setActiveTab(currentUser.role === 'BRANCH_MANAGER' ? 'tenant_dashboard' : 'fls_dashboard');
+              }
+            }
+          }
+        };
+
+        sanitizeAndProtectRoute();
+        window.addEventListener('hashchange', sanitizeAndProtectRoute);
+        window.addEventListener('popstate', sanitizeAndProtectRoute);
+        return () => {
+          window.removeEventListener('hashchange', sanitizeAndProtectRoute);
+          window.removeEventListener('popstate', sanitizeAndProtectRoute);
+        };
+      }, [isLoggedIn, currentUser]);
 
       const handleForgotPasswordSubmit = (e) => {
         e.preventDefault();
@@ -5683,6 +5843,13 @@
               <h1 className="login-app-title">Click to Connect</h1>
               <p className="login-app-subtitle">Agency Business Management System</p>
 
+              {lockoutCountdown > 0 && (
+                <div className="mb-4 p-3 rounded-xl bg-amber-950/90 border border-amber-500 text-amber-200 text-xs font-semibold flex items-center space-x-2 animate-pulse">
+                  <span>⏳</span>
+                  <span>Security Lockout Active: {lockoutCountdown}s remaining</span>
+                </div>
+              )}
+
               {loginError && (
                 <div className="mb-4 p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-semibold flex items-center space-x-2">
                   <span>⚠️</span>
@@ -5704,9 +5871,10 @@
                     type="text"
                     required
                     autoFocus
+                    disabled={lockoutCountdown > 0}
                     value={loginInputUserId}
                     onChange={(e) => setLoginInputUserId(e.target.value)}
-                    className="login-input"
+                    className="login-input disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Enter your User ID"
                   />
                 </div>
@@ -5717,15 +5885,17 @@
                     <input
                       type={loginShowPassword ? 'text' : 'password'}
                       required
+                      disabled={lockoutCountdown > 0}
                       value={loginInputPassword}
                       onChange={(e) => setLoginInputPassword(e.target.value)}
-                      className="login-input pr-10"
+                      className="login-input pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="Enter your password"
                     />
                     <button
                       type="button"
+                      disabled={lockoutCountdown > 0}
                       onClick={() => setLoginShowPassword(!loginShowPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-sm"
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-sm disabled:opacity-50"
                       tabIndex="-1"
                     >
                       {loginShowPassword ? '👁️' : '🔒'}
@@ -5735,11 +5905,13 @@
 
                 <button
                   type="submit"
-                  disabled={isLoggingIn}
-                  className="btn-signin mt-2"
+                  disabled={isLoggingIn || lockoutCountdown > 0}
+                  className="btn-signin mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoggingIn ? (
                     <span>Verifying Credentials...</span>
+                  ) : lockoutCountdown > 0 ? (
+                    <span>Locked ({lockoutCountdown}s)</span>
                   ) : (
                     <span>Sign In</span>
                   )}
@@ -5760,11 +5932,15 @@
                 </div>
               </form>
 
-              <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
-                <span className="text-[10px] text-slate-500 font-medium flex items-center justify-center space-x-1">
+              <div className="mt-6 pt-4 border-t border-slate-800/80 text-center space-y-1.5">
+                <div className="text-[10px] text-emerald-400 font-semibold flex items-center justify-center space-x-1">
+                  <span>🛡️</span>
+                  <span>5-Minute Inactivity Protection • Strict Credential Verification</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium flex items-center justify-center space-x-1">
                   <span>🔒</span>
-                  <span>Role-Based Isolated Access & End-to-End Encryption</span>
-                </span>
+                  <span>Direct URL Shielding Active • End-to-End Cryptographic Auth</span>
+                </div>
               </div>
             </div>
 
@@ -5828,6 +6004,52 @@
             <div className="fixed top-4 right-4 z-50 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-indigo-400/40 text-xs font-semibold flex items-center space-x-2 animate-fadeIn">
               <span>🔔</span>
               <span>{toast.message}</span>
+            </div>
+          )}
+
+          {/* 5-MINUTE INACTIVITY SECURITY WARNING MODAL */}
+          {showInactivityWarning && (
+            <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+              <div className="bg-slate-900 border-2 border-amber-500 rounded-2xl max-w-md w-full p-6 text-slate-100 shadow-2xl space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl animate-pulse">
+                    ⏳
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Inactivity Security Warning</h3>
+                    <p className="text-xs text-amber-300 font-semibold">Automatic logout in {inactivityCountdown} seconds</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  For maximum security protection, your session will automatically terminate after 5 minutes of inactivity to protect sensitive customer and agency policy data.
+                </p>
+                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                  <div 
+                    className="bg-amber-500 h-full transition-all duration-1000"
+                    style={{ width: `${(inactivityCountdown / 30) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleInactivityTimeout}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all"
+                  >
+                    Sign Out Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      lastActivityTimeRef.current = Date.now();
+                      setShowInactivityWarning(false);
+                      setInactivityCountdown(30);
+                    }}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg hover:scale-105 transition-all"
+                  >
+                    Stay Logged In
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
