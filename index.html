@@ -131,6 +131,32 @@
         }
         localStorage.setItem('bms_clean_bda_purge_v10', 'true');
       }
+
+      // Cache Migration v11: Purge hardcoded demo products & demo promo campaigns
+      if (!localStorage.getItem('bms_clean_products_v11')) {
+        const demoProductNames = [
+          'CareShield Comprehensive Health',
+          'ProHealth Prime Protect',
+          'Arogya Sanjeevani Essential',
+          'Super Top-up Plus'
+        ];
+        const rawProds = localStorage.getItem('bms_products_v1');
+        if (rawProds) {
+          try {
+            const prods = JSON.parse(rawProds);
+            const cleanProds = (prods || []).filter(p =>
+              !demoProductNames.includes(p.name) &&
+              !['prod-101', 'prod-102', 'prod-103', 'prod-104'].includes(p.id) &&
+              !['CS-COMP-01', 'PHP-PRIME-02', 'AS-ESS-03', 'STU-PLUS-04'].includes(p.code)
+            );
+            localStorage.setItem('bms_products_v1', JSON.stringify(cleanProds));
+          } catch(err) {}
+        } else {
+          localStorage.setItem('bms_products_v1', JSON.stringify([]));
+        }
+        localStorage.removeItem('bms_promo_credit_campaigns_v1');
+        localStorage.setItem('bms_clean_products_v11', 'true');
+      }
     } catch (e) {}
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -373,126 +399,7 @@
     // ============================================================
 
     // 1. Product & Product Credit Master (Central & Branch Cloned Scope with Sum-Assured Slabs)
-    const INITIAL_PRODUCTS = [
-      {
-        id: 'prod-101',
-        name: 'CareShield Comprehensive Health',
-        code: 'CS-COMP-01',
-        insurer: 'ManipalCigna',
-        category: 'Comprehensive Health',
-        minSumInsured: 500000,
-        scope: 'CENTRAL',
-        sourceProductId: null,
-        sourceProductName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        creditSlabs: [
-          { id: 'slb-101-1', minSI: 0, maxSI: 499999, label: 'Below ₹5 Lakh', creditPercent: 0, notes: 'No Business Credit' },
-          { id: 'slb-101-2', minSI: 500000, maxSI: 9999999, label: '₹5 Lakh to ₹100 Lakh', creditPercent: 100, notes: '100% Standard Credit' },
-          { id: 'slb-101-3', minSI: 10000000, maxSI: null, label: 'Above ₹100 Lakh', creditPercent: 120, notes: '120% High-SI Incentive' }
-        ],
-        portabilityCreditPercent: 100,
-        renewalCreditPercent: 100,
-        clubEligible: true,
-        contestEligible: true,
-        multiYearAllowed: true,
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Product & Product Credit Master' }
-        ]
-      },
-      {
-        id: 'prod-102',
-        name: 'ProHealth Prime Protect',
-        code: 'PHP-PRIME-02',
-        insurer: 'ManipalCigna',
-        category: 'Individual / Floater',
-        minSumInsured: 500000,
-        scope: 'CENTRAL',
-        sourceProductId: null,
-        sourceProductName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        creditSlabs: [
-          { id: 'slb-102-1', minSI: 0, maxSI: 499999, label: 'Below ₹5 Lakh', creditPercent: 0, notes: 'No Business Credit' },
-          { id: 'slb-102-2', minSI: 500000, maxSI: 9999999, label: '₹5 Lakh to ₹100 Lakh', creditPercent: 100, notes: '100% Standard Credit' },
-          { id: 'slb-102-3', minSI: 10000000, maxSI: null, label: 'Above ₹100 Lakh', creditPercent: 115, notes: '115% High-SI Incentive' }
-        ],
-        portabilityCreditPercent: 100,
-        renewalCreditPercent: 100,
-        clubEligible: true,
-        contestEligible: true,
-        multiYearAllowed: true,
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Product & Product Credit Master' }
-        ]
-      },
-      {
-        id: 'prod-103',
-        name: 'Arogya Sanjeevani Essential',
-        code: 'AS-ESS-03',
-        insurer: 'ManipalCigna',
-        category: 'Standard Health',
-        minSumInsured: 100000,
-        scope: 'CENTRAL',
-        sourceProductId: null,
-        sourceProductName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        creditSlabs: [
-          { id: 'slb-103-1', minSI: 0, maxSI: 499999, label: 'Below ₹5 Lakh', creditPercent: 0, notes: 'Low SI Exclusion' },
-          { id: 'slb-103-2', minSI: 500000, maxSI: null, label: '₹5 Lakh & Above', creditPercent: 50, notes: '50% Capped Retail Credit' }
-        ],
-        portabilityCreditPercent: 50,
-        renewalCreditPercent: 80,
-        clubEligible: false,
-        contestEligible: false,
-        multiYearAllowed: false,
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Product & Product Credit Master' }
-        ]
-      },
-      {
-        id: 'prod-104',
-        name: 'Super Top-up Plus',
-        code: 'STU-PLUS-04',
-        insurer: 'ManipalCigna',
-        category: 'Top-up / Deductible',
-        minSumInsured: 1000000,
-        scope: 'CENTRAL',
-        sourceProductId: null,
-        sourceProductName: null,
-        branchId: null,
-        branchName: 'Corporate Central',
-        creditSlabs: [
-          { id: 'slb-104-1', minSI: 0, maxSI: 999999, label: 'Below ₹10 Lakh', creditPercent: 0, notes: 'No Credit' },
-          { id: 'slb-104-2', minSI: 1000000, maxSI: null, label: '₹10 Lakh & Above', creditPercent: 100, notes: '100% Full Top-up Credit' }
-        ],
-        portabilityCreditPercent: 100,
-        renewalCreditPercent: 100,
-        clubEligible: true,
-        contestEligible: true,
-        multiYearAllowed: true,
-        status: 'Active',
-        createdBy: 'Alexandre Sterling (Super Admin)',
-        createdAt: '2026-10-01',
-        updatedAt: '2026-10-01',
-        history: [
-          { timestamp: '2026-10-01 09:00', user: 'Super Admin', action: 'CREATED', details: 'Initialized Central Product & Product Credit Master' }
-        ]
-      }
-    ];
+    const INITIAL_PRODUCTS = [];
 
     // 2. Agent Club Master (Central & Branch Clones)
     const INITIAL_AGENT_CLUBS = [];
@@ -1077,7 +984,7 @@
         customerName: '',
         customerMobile: '',
         customerEmail: '',
-        productName: 'CareShield Comprehensive Health',
+        productName: '',
         renewalPremium: '',
         renewalDueDate: '',
         agentId: '',
@@ -1449,7 +1356,7 @@
           const prem = Number(row.renewalPremium || row.premium || row['Renewal Premium'] || 15000);
           const dDate = (row.renewalDueDate || row.dueDate || row['Due Date'] || '2026-10-31').trim();
           const pLink = (row.paymentLink || row.link || `https://pay.manipalcigna.com/renew/${pNo}`).trim();
-          const prod = (row.productName || row.product || 'CareShield Comprehensive Health').trim();
+          const prod = (row.productName || row.product || 'Standard Health Plan').trim();
           const agCode = (row.agentCode || row.agent || '').trim();
 
           const foundAgent = currentTenantTeam.find(m => m.role === 'AGENT' && (m.code === agCode || m.name.toLowerCase().includes(agCode.toLowerCase())));
@@ -1536,7 +1443,7 @@
           customerName: '',
           customerMobile: '',
           customerEmail: '',
-          productName: 'CareShield Comprehensive Health',
+          productName: '',
           renewalPremium: '',
           renewalDueDate: new Date().toISOString().split('T')[0],
           agentId: defaultAgent ? defaultAgent.id : '',
@@ -1669,7 +1576,7 @@
           customerName: renewal.customerName,
           customerMobile: renewal.customerMobile,
           customerEmail: renewal.customerEmail || '',
-          productName: renewal.productName || 'CareShield Comprehensive Health',
+          productName: renewal.productName || '',
           renewalPremium: renewal.renewalPremium,
           renewalDueDate: renewal.renewalDueDate,
           agentId: renewal.agentId || '',
@@ -1908,9 +1815,23 @@
       const [products, setProducts] = useState(() => {
         try {
           const saved = localStorage.getItem('bms_products_v1');
-          return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const demoProductNames = [
+              'CareShield Comprehensive Health',
+              'ProHealth Prime Protect',
+              'Arogya Sanjeevani Essential',
+              'Super Top-up Plus'
+            ];
+            return (parsed || []).filter(p => 
+              !demoProductNames.includes(p.name) &&
+              !['prod-101', 'prod-102', 'prod-103', 'prod-104'].includes(p.id) &&
+              !['CS-COMP-01', 'PHP-PRIME-02', 'AS-ESS-03', 'STU-PLUS-04'].includes(p.code)
+            );
+          }
+          return [];
         } catch (e) {
-          return INITIAL_PRODUCTS;
+          return [];
         }
       });
       useEffect(() => {
@@ -1968,22 +1889,7 @@
       const [promotionalCreditCampaigns, setPromotionalCreditCampaigns] = useState(() => {
         try {
           const saved = localStorage.getItem('bms_promo_credit_campaigns_v1');
-          return saved ? JSON.parse(saved) : [
-            {
-              id: 'promo-1',
-              name: 'Festive High-Credit Campaign',
-              productId: 'prod-101',
-              productName: 'CareShield Comprehensive Health',
-              contestId: 'ALL',
-              contestName: 'All Qualifying Contests',
-              creditPercent: 125,
-              startDate: '2026-10-10',
-              endDate: '2026-10-25',
-              minSumInsured: 500000,
-              status: 'Active',
-              notes: 'Company special 125% credit bonus for festive month'
-            }
-          ];
+          return saved ? JSON.parse(saved) : [];
         } catch (e) {
           return [];
         }
@@ -1997,8 +1903,8 @@
       const [promoCampaignForm, setPromoCampaignForm] = useState({
         id: '',
         name: '',
-        productId: 'prod-101',
-        productName: 'CareShield Comprehensive Health',
+        productId: '',
+        productName: '',
         contestId: 'ALL',
         contestName: 'All Qualifying Contests',
         creditPercent: 120,
@@ -2170,7 +2076,7 @@
       const [policyForm, setPolicyForm] = useState({
         policyNumber: '',
         customerName: '',
-        productName: 'CareShield Comprehensive Health',
+        productName: '',
         businessType: 'New Business',
         sumInsured: 1000000,
         annualPremium: 48000,
@@ -3874,6 +3780,27 @@
         }));
       };
 
+      const handleDeleteProduct = (productId) => {
+        const prodToDelete = products.find(p => p.id === productId);
+        const prodName = prodToDelete ? prodToDelete.name : 'this product';
+        if (window.confirm(`Are you sure you want to remove product "${prodName}"?`)) {
+          setProducts(prev => {
+            const updated = prev.filter(p => p.id !== productId);
+            try { localStorage.setItem('bms_products_v1', JSON.stringify(updated)); } catch(e) {}
+            return updated;
+          });
+          showToast(`✓ Product "${prodName}" removed successfully!`, 'info');
+        }
+      };
+
+      const handleClearAllProducts = () => {
+        if (window.confirm('Are you sure you want to remove all products from the Product Master Directory?')) {
+          setProducts([]);
+          try { localStorage.setItem('bms_products_v1', JSON.stringify([])); } catch(e) {}
+          showToast('✓ All products cleared from Product Master Directory!', 'info');
+        }
+      };
+
       const handleSaveProduct = (e) => {
         e.preventDefault();
         if (!productForm.name || !productForm.code) {
@@ -4070,12 +3997,12 @@
       // PRODUCT-WISE EXTRA CREDIT & PROMOTIONAL MULTIPLIERS FOR CONTESTS
       // ========================================================
       const handleAddProductCreditRule = () => {
-        const defaultProd = products[0] || { id: 'prod-101', name: 'CareShield Comprehensive Health', code: 'CS-01', minSumInsured: 500000 };
+        const defaultProd = products[0] || { id: 'prod-custom', name: 'Standard Health Plan', code: 'GEN-01', minSumInsured: 500000 };
         const newRule = {
           id: 'pcr-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
           productId: defaultProd.id,
           productName: defaultProd.name,
-          productCode: defaultProd.code || 'CS-01',
+          productCode: defaultProd.code || 'GEN-01',
           creditPercent: 120, // 120% default promotional credit
           minSumInsured: defaultProd.minSumInsured || 500000,
           periodType: 'CUSTOM', // 'FULL_CONTEST' | 'CUSTOM'
@@ -4125,7 +4052,7 @@
           setPromoCampaignForm({ ...campaignToEdit });
           setEditingPromoId(campaignToEdit.id);
         } else {
-          const defaultProd = products[0] || { id: 'prod-101', name: 'CareShield Comprehensive Health' };
+          const defaultProd = products[0] || { id: 'prod-custom', name: 'Standard Health Plan' };
           setPromoCampaignForm({
             id: '',
             name: '',
@@ -4158,7 +4085,7 @@
         const campaignRecord = {
           ...promoCampaignForm,
           name: pName,
-          productName: selectedProd ? selectedProd.name : (promoCampaignForm.productName || 'CareShield Comprehensive Health'),
+          productName: selectedProd ? selectedProd.name : (promoCampaignForm.productName || 'Standard Health Plan'),
           contestName: promoCampaignForm.contestId === 'ALL' ? 'All Qualifying Contests' : (selectedContest ? selectedContest.name : 'Selected Contest'),
           creditPercent: Number(promoCampaignForm.creditPercent) || 100,
           minSumInsured: Number(promoCampaignForm.minSumInsured) || 0
@@ -4557,13 +4484,17 @@
 
         const contestCredit = Math.round(eligibleVol * contestCreditRate);
 
+        const matchedProduct = products.find(p => p.name === policyForm.productName || p.id === policyForm.productName);
+        const resolvedProductCode = matchedProduct ? matchedProduct.code : (policyForm.productCode || 'PROD-GEN');
+        const resolvedInsurer = matchedProduct ? matchedProduct.insurer : 'ManipalCigna';
+
         const newPol = {
           id: 'pol-' + Date.now(),
           policyNumber: policyForm.policyNumber || ('POL-2026-' + Math.floor(100000 + Math.random() * 900000)),
           customerName: policyForm.customerName,
-          productName: policyForm.productName,
-          productCode: 'CS-COMP-01',
-          insurer: 'ManipalCigna',
+          productName: matchedProduct ? matchedProduct.name : (policyForm.productName || 'Standard Health Plan'),
+          productCode: resolvedProductCode,
+          insurer: resolvedInsurer,
           businessType: policyForm.businessType,
           sumInsured: si,
           annualPremium: annual,
@@ -4594,7 +4525,7 @@
         setPolicyForm({
           policyNumber: '',
           customerName: '',
-          productName: 'CareShield Comprehensive Health',
+          productName: '',
           businessType: 'New Business',
           sumInsured: 1000000,
           annualPremium: 48000,
@@ -10654,13 +10585,21 @@
 
                                       <button
                                         onClick={() => handleToggleMasterStatus('PRODUCT', prod)}
-                                        className={`col-span-2 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors ${
+                                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors ${
                                           prod.status === 'Active'
-                                            ? 'bg-rose-950/20 hover:bg-rose-900/40 text-rose-300 border-rose-800/40'
+                                            ? 'bg-amber-950/20 hover:bg-amber-900/40 text-amber-300 border-amber-800/40'
                                             : 'bg-emerald-950/20 hover:bg-emerald-900/40 text-emerald-300 border-emerald-800/40'
                                         }`}
                                       >
-                                        {prod.status === 'Active' ? 'Deactivate Product Credit' : 'Activate Product Credit'}
+                                        {prod.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteProduct(prod.id)}
+                                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-rose-950/30 hover:bg-rose-900/50 text-rose-300 border border-rose-800/40 flex items-center justify-center space-x-1"
+                                        title="Delete product"
+                                      >
+                                        <span>🗑️</span>
+                                        <span>Remove</span>
                                       </button>
                                     </div>
                                   </div>
@@ -10855,6 +10794,16 @@
                       <span>➕</span>
                       <span>+ Add Insurance Product</span>
                     </button>
+                    {products.length > 0 && (
+                      <button
+                        onClick={handleClearAllProducts}
+                        className="px-3 py-1.5 text-xs font-semibold bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-lg flex items-center space-x-1 transition-all"
+                        title="Remove all products from directory"
+                      >
+                        <span>🗑️</span>
+                        <span>Clear All Products</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => setActiveTab('tenant_dashboard')}
                       className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-lg"
@@ -10910,54 +10859,78 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {products.map(p => (
-                          <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="p-3 font-bold text-white">
-                              <div>{p.name}</div>
-                              {p.multiYearAllowed && <span className="text-[10px] text-indigo-400 font-medium">Multi-Year (1, 2, 3 Yr) Supported</span>}
-                            </td>
-                            <td className="p-3">
-                              <span className="font-mono text-sky-400 font-bold block">{p.code}</span>
-                              <span className="text-[10px] text-slate-400">{p.insurer}</span>
-                            </td>
-                            <td className="p-3 text-slate-300">{p.category}</td>
-                            <td className="p-3">
-                              <span className="text-[11px] text-slate-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                                {p.siCreditRule}
-                              </span>
-                            </td>
-                            <td className="p-3 font-mono font-bold text-white">
-                              {p.creditRatePercent}%
-                            </td>
-                            <td className="p-3 font-mono text-slate-300">
-                              {p.portabilityCreditPercent}%
-                            </td>
-                            <td className="p-3">
-                              <div className="flex items-center space-x-1.5 text-[10px]">
-                                <span className={p.clubEligible ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                                  {p.clubEligible ? '✓ Club' : '✕ Club'}
-                                </span>
-                                <span>•</span>
-                                <span className={p.contestEligible ? 'text-purple-400 font-bold' : 'text-slate-500'}>
-                                  {p.contestEligible ? '✓ Contest' : '✕ Contest'}
+                        {products.length === 0 ? (
+                          <tr>
+                            <td colSpan="9" className="p-10 text-center text-slate-400">
+                              <div className="flex flex-col items-center justify-center space-y-2">
+                                <span className="text-3xl">📦</span>
+                                <span className="font-semibold text-white">No Insurance Products in Directory</span>
+                                <span className="text-xs text-slate-400 max-w-sm">
+                                  All demo products have been removed. Click <strong>+ Add Insurance Product</strong> above to register your agency's official insurance plans.
                                 </span>
                               </div>
                             </td>
-                            <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'Active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}`}>
-                                {p.status}
-                              </span>
-                            </td>
-                            <td className="p-3 text-right">
-                              <button
-                                onClick={() => handleToggleProductStatus(p.id)}
-                                className="px-2.5 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold"
-                              >
-                                {p.status === 'Active' ? 'Deactivate' : 'Activate'}
-                              </button>
-                            </td>
                           </tr>
-                        ))}
+                        ) : (
+                          products.map(p => (
+                            <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="p-3 font-bold text-white">
+                                <div>{p.name}</div>
+                                {p.multiYearAllowed && <span className="text-[10px] text-indigo-400 font-medium">Multi-Year (1, 2, 3 Yr) Supported</span>}
+                              </td>
+                              <td className="p-3">
+                                <span className="font-mono text-sky-400 font-bold block">{p.code}</span>
+                                <span className="text-[10px] text-slate-400">{p.insurer}</span>
+                              </td>
+                              <td className="p-3 text-slate-300">{p.category}</td>
+                              <td className="p-3">
+                                <span className="text-[11px] text-slate-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                                  {p.siCreditRule}
+                                </span>
+                              </td>
+                              <td className="p-3 font-mono font-bold text-white">
+                                {p.creditRatePercent}%
+                              </td>
+                              <td className="p-3 font-mono text-slate-300">
+                                {p.portabilityCreditPercent}%
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center space-x-1.5 text-[10px]">
+                                  <span className={p.clubEligible ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                                    {p.clubEligible ? '✓ Club' : '✕ Club'}
+                                  </span>
+                                  <span>•</span>
+                                  <span className={p.contestEligible ? 'text-purple-400 font-bold' : 'text-slate-500'}>
+                                    {p.contestEligible ? '✓ Contest' : '✕ Contest'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'Active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}`}>
+                                  {p.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end space-x-1.5">
+                                  <button
+                                    onClick={() => handleToggleProductStatus(p.id)}
+                                    className="px-2.5 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold"
+                                  >
+                                    {p.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(p.id)}
+                                    className="px-2.5 py-1 text-[11px] rounded bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 font-semibold flex items-center space-x-1"
+                                    title="Remove this product"
+                                  >
+                                    <span>🗑️</span>
+                                    <span>Remove</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -15666,13 +15639,21 @@
                         onChange={(e) => setAddRenewalForm({ ...addRenewalForm, productName: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-sky-500"
                       >
-                        <option value="CareShield Comprehensive Health">CareShield Comprehensive Health</option>
-                        <option value="ProHealth Prime Protect">ProHealth Prime Protect</option>
-                        <option value="ProHealth Senior Protect">ProHealth Senior Protect</option>
-                        <option value="Super TopUp Plus">Super TopUp Plus</option>
-                        <option value="Arogya Sanjeevani Standard">Arogya Sanjeevani Standard</option>
-                        <option value="Critical Illness Shield">Critical Illness Shield</option>
-                        <option value="Flexi Care Group Shield">Flexi Care Group Shield</option>
+                        <option value="">-- Select Product --</option>
+                        {products.length > 0 ? (
+                          products.map(p => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="Comprehensive Health">Comprehensive Health</option>
+                            <option value="Individual Floater">Individual Floater</option>
+                            <option value="Senior Health Protect">Senior Health Protect</option>
+                            <option value="Super TopUp">Super TopUp</option>
+                            <option value="Standard Health">Standard Health</option>
+                            <option value="Critical Illness">Critical Illness</option>
+                          </>
+                        )}
                       </select>
                     </div>
 
@@ -15861,13 +15842,21 @@
                         onChange={(e) => setEditRenewalForm({ ...editRenewalForm, productName: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-500"
                       >
-                        <option value="CareShield Comprehensive Health">CareShield Comprehensive Health</option>
-                        <option value="ProHealth Prime Protect">ProHealth Prime Protect</option>
-                        <option value="ProHealth Senior Protect">ProHealth Senior Protect</option>
-                        <option value="Super TopUp Plus">Super TopUp Plus</option>
-                        <option value="Arogya Sanjeevani Standard">Arogya Sanjeevani Standard</option>
-                        <option value="Critical Illness Shield">Critical Illness Shield</option>
-                        <option value="Flexi Care Group Shield">Flexi Care Group Shield</option>
+                        <option value="">-- Select Product --</option>
+                        {products.length > 0 ? (
+                          products.map(p => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="Comprehensive Health">Comprehensive Health</option>
+                            <option value="Individual Floater">Individual Floater</option>
+                            <option value="Senior Health Protect">Senior Health Protect</option>
+                            <option value="Super TopUp">Super TopUp</option>
+                            <option value="Standard Health">Standard Health</option>
+                            <option value="Critical Illness">Critical Illness</option>
+                          </>
+                        )}
                       </select>
                     </div>
 
@@ -17833,7 +17822,7 @@
                       <span>✓ Policy Verified</span>
                       <span className="text-[10px] text-slate-500">10m ago</span>
                     </div>
-                    <p className="text-slate-300">Policy POL-2026-881901 (CareShield) issued by Suresh Nair verified for full branch credit.</p>
+                    <p className="text-slate-300">New business policy POL-2026-881901 verified for branch credit.</p>
                   </div>
                   <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
                     <div className="flex justify-between font-bold text-rose-400 mb-0.5">
@@ -17942,7 +17931,7 @@
                       value={productForm.name}
                       onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                      placeholder="e.g. CareShield Pro Health"
+                      placeholder="e.g. Comprehensive Health Plan"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -17954,7 +17943,7 @@
                         value={productForm.code}
                         onChange={(e) => setProductForm({ ...productForm, code: e.target.value.toUpperCase() })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                        placeholder="e.g. CS-PRO-01"
+                        placeholder="e.g. COMP-01"
                       />
                     </div>
                     <div>
@@ -18075,7 +18064,7 @@
                         value={productCreditForm.name}
                         onChange={(e) => setProductCreditForm({ ...productCreditForm, name: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                        placeholder="e.g. CareShield Comprehensive Health"
+                        placeholder="e.g. Standard Health Plan"
                       />
                     </div>
                     <div>
@@ -18086,7 +18075,7 @@
                         value={productCreditForm.code}
                         onChange={(e) => setProductCreditForm({ ...productCreditForm, code: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                        placeholder="e.g. CS-COMP-01"
+                        placeholder="e.g. COMP-01"
                       />
                     </div>
                   </div>
@@ -19467,15 +19456,26 @@
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 mb-1 font-semibold">Product Name</label>
-                      <select
-                        value={policyForm.productName}
-                        onChange={(e) => setPolicyForm({ ...policyForm, productName: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                      >
-                        {products.map(p => (
-                          <option key={p.id} value={p.name}>{p.name}</option>
-                        ))}
-                      </select>
+                      {products.length > 0 ? (
+                        <select
+                          value={policyForm.productName}
+                          onChange={(e) => setPolicyForm({ ...policyForm, productName: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                        >
+                          <option value="">-- Select Product --</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={policyForm.productName}
+                          onChange={(e) => setPolicyForm({ ...policyForm, productName: e.target.value })}
+                          placeholder="e.g. Standard Health Plan"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-slate-400 mb-1 font-semibold">Business Type</label>
