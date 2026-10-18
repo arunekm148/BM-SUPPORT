@@ -920,10 +920,17 @@
         try {
           const saved = localStorage.getItem('bms_policies_v3');
           const list = saved ? JSON.parse(saved) : [];
-          const demoAgentNames = ['Suresh Nair', 'Meera Patel', 'Rajesh Khurana', 'Ananya Verma', 'Deepak Joshi', 'Sneha Iyer', 'Karthik Menon', 'Pooja Hegde'];
+          const demoAgentNames = [
+            'Suresh Nair', 'Meera Patel', 'Rajesh Khurana', 'Ananya Verma', 'Deepak Joshi', 'Sneha Iyer', 'Karthik Menon', 'Pooja Hegde',
+            'Arjun Varma', 'Kavita Chawla', 'Siddharth Roy', 'Megha Saxena', 'Nikhil Joshi', 'Ananya Nair', 'Gaurav Singhal', 'Divya Pillai',
+            'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra', 'Tarun Bhatia', 'Simran Kaur'
+          ];
           const cleaned = (list || []).filter(p => {
             if (p.branchId === 'tnt-101' || p.branchId === 'tnt-102' || p.branchId === 'tnt-103') return false;
             if (demoAgentNames.includes(p.agentName)) return false;
+            if (p.id && p.id.startsWith('pol-bda-')) return false;
+            if (p.policyNumber && p.policyNumber.startsWith('POL-BDA-')) return false;
+            if (p.agentCode && p.agentCode.startsWith('BDA-80')) return false;
             return true;
           });
           try { localStorage.setItem('bms_policies_v3', JSON.stringify(cleaned)); } catch(e) {}
@@ -2246,12 +2253,18 @@
           const demoNames = [
             'Vikram Malhotra', 'Priya Sharma', 'Rohan Deshmukh',
             'Kavita Rao', 'Suresh Nair', 'Meera Patel', 'Rajesh Khurana',
-            'Ananya Verma', 'Deepak Joshi', 'Sneha Iyer', 'Karthik Menon', 'Pooja Hegde'
+            'Ananya Verma', 'Deepak Joshi', 'Sneha Iyer', 'Karthik Menon', 'Pooja Hegde',
+            'Arjun Varma', 'Kavita Chawla', 'Siddharth Roy', 'Megha Saxena',
+            'Nikhil Joshi', 'Ananya Nair', 'Gaurav Singhal', 'Divya Pillai',
+            'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra',
+            'Tarun Bhatia', 'Simran Kaur'
           ];
           const cleaned = (list || []).filter(m => {
             if (demoMemberIds.includes(m.id)) return false;
             if (demoNames.includes(m.name)) return false;
             if (m.tenantId === 'tnt-101' || m.tenantId === 'tnt-102' || m.tenantId === 'tnt-103') return false;
+            if (m.id && m.id.startsWith('tm-bda-')) return false;
+            if (m.code && m.code.toUpperCase().startsWith('BDA-80')) return false;
             return true;
           });
           try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleaned)); } catch(e) {}
@@ -3411,91 +3424,53 @@
         showToast(`🎉 Confirmed! Successfully synced ${validRows.length} agents directly to portal (${newCount} new agents created, ${updateCount} updated including ${phoneUpdateCount} phone number updates)!`, 'success');
       };
 
-      // Auto-seed realistic BDA Cohort Advisors & Policies if fewer than 6 agents exist
+      // Automatic Sanitization Purge: Ensure no sample/demo BDA agents or demo policies linger
       useEffect(() => {
         try {
-          const currentTenantId = selectedTenant ? selectedTenant.id : 'tnt-tenant-01';
-          const existingAgents = branchTeam.filter(m => m.role === 'AGENT');
-          if (existingAgents.length < 8) {
-            const seedBdaAgents = [
-              { id: 'tm-bda-8011', tenantId: currentTenantId, code: 'BDA-8011', name: 'Arjun Varma', phone: '+91 98201 11223', email: 'arjun.varma@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-05-10', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8012', tenantId: currentTenantId, code: 'BDA-8012', name: 'Kavita Chawla', phone: '+91 98202 22334', email: 'kavita.chawla@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-05-18', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8013', tenantId: currentTenantId, code: 'BDA-8013', name: 'Siddharth Roy', phone: '+91 98203 33445', email: 'siddharth.roy@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-06-08', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8014', tenantId: currentTenantId, code: 'BDA-8014', name: 'Megha Saxena', phone: '+91 98204 44556', email: 'megha.saxena@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-102', reportsToName: 'Priya Sharma (SM-102)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-06-22', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Associate (15%)', status: 'Active' },
-              { id: 'tm-bda-8015', tenantId: currentTenantId, code: 'BDA-8015', name: 'Nikhil Joshi', phone: '+91 98205 55667', email: 'nikhil.joshi@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-07-05', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8016', tenantId: currentTenantId, code: 'BDA-8016', name: 'Ananya Nair', phone: '+91 98206 66778', email: 'ananya.nair@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-07-19', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8017', tenantId: currentTenantId, code: 'BDA-8017', name: 'Gaurav Singhal', phone: '+91 98207 77889', email: 'gaurav.singhal@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-07-28', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Associate (15%)', status: 'Active' },
-              { id: 'tm-bda-8018', tenantId: currentTenantId, code: 'BDA-8018', name: 'Divya Pillai', phone: '+91 98208 88990', email: 'divya.pillai@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-08-04', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8019', tenantId: currentTenantId, code: 'BDA-8019', name: 'Harish Kulkarni', phone: '+91 98209 99001', email: 'harish.kulkarni@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-102', reportsToName: 'Priya Sharma (SM-102)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-08-16', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8020', tenantId: currentTenantId, code: 'BDA-8020', name: 'Pallavi Sen', phone: '+91 98210 10112', email: 'pallavi.sen@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-08-27', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Associate (15%)', status: 'Active' },
-              { id: 'tm-bda-8021', tenantId: currentTenantId, code: 'BDA-8021', name: 'Karan Bajaj', phone: '+91 98211 21223', email: 'karan.bajaj@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-202', reportsToName: 'Kavita Rao (TSE-202)', reportsToRole: 'TSE', joinedDate: '2026-09-06', vertical: 'Branch Agency Vertical', territory: 'South Coast Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8022', tenantId: currentTenantId, code: 'BDA-8022', name: 'Ritu Mehrotra', phone: '+91 98212 32334', email: 'ritu.mehrotra@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-09-20', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8023', tenantId: currentTenantId, code: 'BDA-8023', name: 'Tarun Bhatia', phone: '+91 98213 43445', email: 'tarun.bhatia@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-sm-101', reportsToName: 'Vikram Malhotra (SM-101)', reportsToRole: 'SALES_MANAGER', joinedDate: '2026-10-04', vertical: 'Branch Agency Vertical', territory: 'North City Hub', clubTier: 'Rising Star Club', status: 'Active' },
-              { id: 'tm-bda-8024', tenantId: currentTenantId, code: 'BDA-8024', name: 'Simran Kaur', phone: '+91 98214 54556', email: 'simran.kaur@branchagency.internal', role: 'AGENT', roleLabel: '🌟 Insurance Advisor (Agent)', reportsToId: 'tm-tse-201', reportsToName: 'Rohan Deshmukh (TSE-201)', reportsToRole: 'TSE', joinedDate: '2026-10-11', vertical: 'Branch Agency Vertical', territory: 'Central Metro Hub', clubTier: 'Rising Star Club', status: 'Active' }
-            ];
+          const demoBdaNames = [
+            'Arjun Varma', 'Kavita Chawla', 'Siddharth Roy', 'Megha Saxena',
+            'Nikhil Joshi', 'Ananya Nair', 'Gaurav Singhal', 'Divya Pillai',
+            'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra',
+            'Tarun Bhatia', 'Simran Kaur'
+          ];
 
-            // Filter out existing by code
-            const existingCodes = branchTeam.map(m => (m.code || '').toUpperCase());
-            const toAdd = seedBdaAgents.filter(s => !existingCodes.includes(s.code.toUpperCase()));
-            if (toAdd.length > 0) {
-              const mergedTeam = [...branchTeam, ...toAdd];
-              setBranchTeam(mergedTeam);
-              try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(mergedTeam)); } catch (e) {}
-            }
+          // 1. Purge demo BDA agents from branchTeam
+          const hasBdaDemoAgents = branchTeam.some(m => 
+            (m.id && m.id.startsWith('tm-bda-')) ||
+            (m.code && m.code.toUpperCase().startsWith('BDA-80')) ||
+            demoBdaNames.includes(m.name)
+          );
+          if (hasBdaDemoAgents) {
+            const cleanedTeam = branchTeam.filter(m => 
+              !(m.id && m.id.startsWith('tm-bda-')) &&
+              !(m.code && m.code.toUpperCase().startsWith('BDA-80')) &&
+              !demoBdaNames.includes(m.name)
+            );
+            setBranchTeam(cleanedTeam);
+            try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleanedTeam)); } catch(e) {}
+          }
 
-            // Also seed corresponding policies for cohorts
-            const seedBdaPolicies = [
-              // May cohort
-              { id: 'pol-bda-8011-m0', policyNumber: 'POL-BDA-8011-01', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 16500, issueDate: '2026-05-14', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8011-m1', policyNumber: 'POL-BDA-8011-02', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 18000, issueDate: '2026-06-18', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8011-m2', policyNumber: 'POL-BDA-8011-03', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 15500, issueDate: '2026-07-20', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8011-m3', policyNumber: 'POL-BDA-8011-04', agentCode: 'BDA-8011', agentName: 'Arjun Varma', premiumAmount: 21000, issueDate: '2026-08-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8012-m0', policyNumber: 'POL-BDA-8012-01', agentCode: 'BDA-8012', agentName: 'Kavita Chawla', premiumAmount: 14000, issueDate: '2026-05-22', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8012-m1', policyNumber: 'POL-BDA-8012-02', agentCode: 'BDA-8012', agentName: 'Kavita Chawla', premiumAmount: 15500, issueDate: '2026-06-25', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              // June cohort
-              { id: 'pol-bda-8013-m0', policyNumber: 'POL-BDA-8013-01', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 19000, issueDate: '2026-06-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8013-m1', policyNumber: 'POL-BDA-8013-02', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 17000, issueDate: '2026-07-16', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8013-m2', policyNumber: 'POL-BDA-8013-03', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 16500, issueDate: '2026-08-19', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8013-m3', policyNumber: 'POL-BDA-8013-04', agentCode: 'BDA-8013', agentName: 'Siddharth Roy', premiumAmount: 22000, issueDate: '2026-09-14', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8014-m0', policyNumber: 'POL-BDA-8014-01', agentCode: 'BDA-8014', agentName: 'Megha Saxena', premiumAmount: 9000, issueDate: '2026-06-28', branchId: currentTenantId, productName: 'Term Protection Life', status: 'In Force' },
-              // July cohort
-              { id: 'pol-bda-8015-m0', policyNumber: 'POL-BDA-8015-01', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 24000, issueDate: '2026-07-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8015-m1', policyNumber: 'POL-BDA-8015-02', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 18000, issueDate: '2026-08-15', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8015-m2', policyNumber: 'POL-BDA-8015-03', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 20000, issueDate: '2026-09-18', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8015-m3', policyNumber: 'POL-BDA-8015-04', agentCode: 'BDA-8015', agentName: 'Nikhil Joshi', premiumAmount: 16000, issueDate: '2026-10-09', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8016-m0', policyNumber: 'POL-BDA-8016-01', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 15500, issueDate: '2026-07-22', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8016-m1', policyNumber: 'POL-BDA-8016-02', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 12000, issueDate: '2026-08-20', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8016-m2', policyNumber: 'POL-BDA-8016-03', agentCode: 'BDA-8016', agentName: 'Ananya Nair', premiumAmount: 16000, issueDate: '2026-09-25', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8017-m0', policyNumber: 'POL-BDA-8017-01', agentCode: 'BDA-8017', agentName: 'Gaurav Singhal', premiumAmount: 8000, issueDate: '2026-07-30', branchId: currentTenantId, productName: 'Term Protection Life', status: 'In Force' },
-              // August cohort
-              { id: 'pol-bda-8018-m0', policyNumber: 'POL-BDA-8018-01', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 18000, issueDate: '2026-08-09', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8018-m1', policyNumber: 'POL-BDA-8018-02', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 21000, issueDate: '2026-09-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8018-m2', policyNumber: 'POL-BDA-8018-03', agentCode: 'BDA-8018', agentName: 'Divya Pillai', premiumAmount: 17500, issueDate: '2026-10-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8019-m0', policyNumber: 'POL-BDA-8019-01', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 15000, issueDate: '2026-08-20', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8019-m1', policyNumber: 'POL-BDA-8019-02', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 16500, issueDate: '2026-09-21', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8019-m2', policyNumber: 'POL-BDA-8019-03', agentCode: 'BDA-8019', agentName: 'Harish Kulkarni', premiumAmount: 14000, issueDate: '2026-10-08', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              // September cohort
-              { id: 'pol-bda-8021-m0', policyNumber: 'POL-BDA-8021-01', agentCode: 'BDA-8021', agentName: 'Karan Bajaj', premiumAmount: 17000, issueDate: '2026-09-10', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8021-m1', policyNumber: 'POL-BDA-8021-02', agentCode: 'BDA-8021', agentName: 'Karan Bajaj', premiumAmount: 19500, issueDate: '2026-10-12', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8022-m0', policyNumber: 'POL-BDA-8022-01', agentCode: 'BDA-8022', agentName: 'Ritu Mehrotra', premiumAmount: 15200, issueDate: '2026-09-24', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              { id: 'pol-bda-8022-m1', policyNumber: 'POL-BDA-8022-02', agentCode: 'BDA-8022', agentName: 'Ritu Mehrotra', premiumAmount: 11000, issueDate: '2026-10-05', branchId: currentTenantId, productName: 'Future Genius Plan', status: 'In Force' },
-              // October cohort (Current Month M0 Fast-Starters)
-              { id: 'pol-bda-8023-m0', policyNumber: 'POL-BDA-8023-01', agentCode: 'BDA-8023', agentName: 'Tarun Bhatia', premiumAmount: 22000, issueDate: '2026-10-06', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' },
-              { id: 'pol-bda-8024-m0', policyNumber: 'POL-BDA-8024-01', agentCode: 'BDA-8024', agentName: 'Simran Kaur', premiumAmount: 16500, issueDate: '2026-10-13', branchId: currentTenantId, productName: 'Max Life Smart Wealth', status: 'In Force' }
-            ];
-
-            const existingPolNums = policies.map(p => p.policyNumber);
-            const polsToAdd = seedBdaPolicies.filter(p => !existingPolNums.includes(p.policyNumber));
-            if (polsToAdd.length > 0) {
-              const mergedPols = [...policies, ...polsToAdd];
-              setPolicies(mergedPols);
-              try { localStorage.setItem('bms_policies_v3', JSON.stringify(mergedPols)); } catch (e) {}
-            }
+          // 2. Purge demo BDA policies from policies
+          const hasBdaDemoPolicies = policies.some(p => 
+            (p.id && p.id.startsWith('pol-bda-')) ||
+            (p.policyNumber && p.policyNumber.toUpperCase().startsWith('POL-BDA-')) ||
+            (p.agentCode && p.agentCode.toUpperCase().startsWith('BDA-80')) ||
+            demoBdaNames.includes(p.agentName)
+          );
+          if (hasBdaDemoPolicies) {
+            const cleanedPolicies = policies.filter(p => 
+              !(p.id && p.id.startsWith('pol-bda-')) &&
+              !(p.policyNumber && p.policyNumber.toUpperCase().startsWith('POL-BDA-')) &&
+              !(p.agentCode && p.agentCode.toUpperCase().startsWith('BDA-80')) &&
+              !demoBdaNames.includes(p.agentName)
+            );
+            setPolicies(cleanedPolicies);
+            try { localStorage.setItem('bms_policies_v3', JSON.stringify(cleanedPolicies)); } catch(e) {}
           }
         } catch (e) {
-          console.warn('BDA seeding error:', e);
+          console.warn('Storage purge error:', e);
         }
-      }, [branchTeam, selectedTenant]);
+      }, [branchTeam, policies]);
 
       // Handle Delete Member
       // Helper: Get assigned agents for any manager
@@ -5322,7 +5297,8 @@
           const cleaned = prev.filter(m => {
             if (demoNames.includes(m.name)) return false;
             if (m.tenantId === 'tnt-101' || m.tenantId === 'tnt-102' || m.tenantId === 'tnt-103') return false;
-            if (m.id && (m.id.startsWith('tm-sm-') || m.id.startsWith('tm-tse-') || m.id.startsWith('tm-ag-'))) return false;
+            if (m.id && (m.id.startsWith('tm-sm-') || m.id.startsWith('tm-tse-') || m.id.startsWith('tm-ag-') || m.id.startsWith('tm-bda-'))) return false;
+            if (m.code && m.code.toUpperCase().startsWith('BDA-80')) return false;
             return true;
           });
           try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleaned)); } catch(e) {}
