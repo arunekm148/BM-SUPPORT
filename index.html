@@ -99,27 +99,37 @@
 
   <!-- React Application Source Code -->
   <script id="app-source" type="text/plain">
-    // Cache Migration: Purge all legacy demo data so the system starts 100% FRESH
+    // Cache Migration: Unconditionally purge all demo policies and demo BDA advisors on startup
     try {
-      if (!localStorage.getItem('bms_clean_fresh_v8')) {
-        const demoStorageKeys = [
-          'bms_users_v1', 'bms_users_v2', 'bms_users_v3', 'bms_users_v4', 'bms_users_v5',
-          'bms_auth_session_v1', 'bms_auth_session_v2', 'bms_auth_session_v3',
-          'bms_commercial_tenants_v1',
-          'bms_commercial_recharges_v1',
-          'bms_branch_team_v1', 'bms_branch_team_v2', 'bms_branch_team_v3',
-          'bms_policies_v1', 'bms_policies_v2', 'bms_policies_v3',
-          'bms_leads_v1',
-          'bms_renewals_v1',
-          'bms_contests_v1',
-          'bms_agent_clubs_v1',
-          'bms_mbga_config_v1',
-          'bms_products_v1',
-          'bms_messages_v1',
-          'bms_activities_v1'
-        ];
-        demoStorageKeys.forEach(k => localStorage.removeItem(k));
-        localStorage.setItem('bms_clean_fresh_v8', 'true');
+      if (!localStorage.getItem('bms_clean_bda_purge_v10')) {
+        // Clear all policies (resets Business count from 31 to 0)
+        localStorage.removeItem('bms_policies_v1');
+        localStorage.removeItem('bms_policies_v2');
+        localStorage.removeItem('bms_policies_v3');
+        
+        // Clean demo agents from bms_branch_team_v3
+        const rawTeam = localStorage.getItem('bms_branch_team_v3');
+        if (rawTeam) {
+          try {
+            const team = JSON.parse(rawTeam);
+            const demoBdaNames = [
+              'Arjun Varma', 'Kavita Chawla', 'Siddharth Roy', 'Megha Saxena',
+              'Nikhil Joshi', 'Ananya Nair', 'Gaurav Singhal', 'Divya Pillai',
+              'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra',
+              'Tarun Bhatia', 'Simran Kaur', 'Vikram Malhotra', 'Priya Sharma',
+              'Rohan Deshmukh', 'Kavita Rao', 'Suresh Nair', 'Meera Patel',
+              'Rajesh Khurana', 'Ananya Verma', 'Deepak Joshi', 'Sneha Iyer',
+              'Karthik Menon', 'Pooja Hegde'
+            ];
+            const cleanTeam = (team || []).filter(m => 
+              !(m.id && (m.id.startsWith('tm-bda-') || m.id.startsWith('tm-sm-') || m.id.startsWith('tm-tse-') || m.id.startsWith('tm-ag-'))) &&
+              !(m.code && m.code.toUpperCase().startsWith('BDA-80')) &&
+              !demoBdaNames.includes(m.name)
+            );
+            localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleanTeam));
+          } catch(err) {}
+        }
+        localStorage.setItem('bms_clean_bda_purge_v10', 'true');
       }
     } catch (e) {}
 
@@ -3422,6 +3432,36 @@
         setAgentImportStagingRows([]);
 
         showToast(`🎉 Confirmed! Successfully synced ${validRows.length} agents directly to portal (${newCount} new agents created, ${updateCount} updated including ${phoneUpdateCount} phone number updates)!`, 'success');
+      };
+
+      const handlePurgeBdaDemoData = () => {
+        if (!confirm('Permanently remove all demo BDA advisors (Karan, Ritu, Tarun, Simran, etc.) and all demo policies?')) return;
+        
+        const demoBdaNames = [
+          'Arjun Varma', 'Kavita Chawla', 'Siddharth Roy', 'Megha Saxena',
+          'Nikhil Joshi', 'Ananya Nair', 'Gaurav Singhal', 'Divya Pillai',
+          'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra',
+          'Tarun Bhatia', 'Simran Kaur'
+        ];
+
+        const cleanTeam = branchTeam.filter(m => 
+          !(m.id && m.id.startsWith('tm-bda-')) &&
+          !(m.code && m.code.toUpperCase().startsWith('BDA-80')) &&
+          !demoBdaNames.includes(m.name)
+        );
+        setBranchTeam(cleanTeam);
+        try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleanTeam)); } catch(e) {}
+
+        const cleanPolicies = policies.filter(p => 
+          !(p.id && p.id.startsWith('pol-bda-')) &&
+          !(p.policyNumber && p.policyNumber.toUpperCase().startsWith('POL-BDA-')) &&
+          !(p.agentCode && p.agentCode.toUpperCase().startsWith('BDA-80')) &&
+          !demoBdaNames.includes(p.agentName)
+        );
+        setPolicies(cleanPolicies);
+        try { localStorage.setItem('bms_policies_v3', JSON.stringify(cleanPolicies)); } catch(e) {}
+
+        showToast('All demo BDA advisors and demo policies cleared!', 'success');
       };
 
       // Automatic Sanitization Purge: Ensure no sample/demo BDA agents or demo policies linger
@@ -10997,6 +11037,15 @@
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePurgeBdaDemoData}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-800/60 flex items-center space-x-1.5 transition-all shadow-sm"
+                      title="Clear all demo/sample BDA advisors and policies"
+                    >
+                      <span>🗑️</span>
+                      <span>Clear Demo Data</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setShowAgentExcelImportModal(true)}
