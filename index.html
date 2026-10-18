@@ -77,10 +77,28 @@
   </script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
-  <div id="root" class="flex-1 flex flex-col h-screen"></div>
+  <div id="root" class="flex-1 flex flex-col h-screen">
+    <!-- Instant Loading Visual Guard (Cleanly replaced when React mounts) -->
+    <div id="app-loading-fallback" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; background:#020617; color:#f8fafc; font-family:system-ui, -apple-system, sans-serif;">
+      <div style="position:relative; display:flex; align-items:center; justify-content:center; margin-bottom:18px;">
+        <div style="width:52px; height:52px; border:4px solid #1e293b; border-top-color:#6366f1; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+        <span style="position:absolute; font-size:20px;">🛡️</span>
+      </div>
+      <div style="font-size:16px; font-weight:800; letter-spacing:0.5px; margin-bottom:4px;">Click to Connect</div>
+      <div style="font-size:12px; color:#818cf8; font-family:monospace; margin-bottom:12px;">Enterprise Insurance Agency Management</div>
+      <div style="font-size:11px; color:#64748b; display:flex; align-items:center; gap:6px;">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#34d399; animation:pulse 1.5s infinite;"></span>
+        <span id="app-loading-status">Initializing Portal Engine...</span>
+      </div>
+      <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+      </style>
+    </div>
+  </div>
 
   <!-- React Application Source Code -->
-  <script type="text/babel">
+  <script id="app-source" type="text/plain">
     // Cache Migration: Purge all legacy demo data so the system starts 100% FRESH
     try {
       if (!localStorage.getItem('bms_clean_fresh_v8')) {
@@ -603,6 +621,65 @@
         lastMonthCredit: lastMonthPolicies.reduce((sum, p) => sum + (p.agentCredit || p.eligibleVolume || p.premiumAmount || 0), 0),
         callHistory: agent.callHistory || []
       };
+    }
+
+    // ==========================================
+    // BULLETPROOF CURRENCY & NUMBER FORMATTER
+    // ==========================================
+    function formatINR(val, fallback = '0') {
+      if (val === null || val === undefined || val === '') return fallback;
+      const num = Number(val);
+      if (isNaN(num)) return fallback;
+      return num.toLocaleString('en-IN');
+    }
+
+    // ==========================================
+    // ENTERPRISE REACT VIEW ERROR BOUNDARY
+    // ==========================================
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, errorInfo) {
+        console.error("ErrorBoundary caught view error:", error, errorInfo);
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="p-8 text-center bg-slate-900 border border-rose-800/80 rounded-2xl m-4 space-y-4 shadow-2xl">
+              <div className="w-12 h-12 mx-auto rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl font-bold">⚠️</div>
+              <div>
+                <h3 className="text-base font-bold text-white">An unexpected error occurred in this view</h3>
+                <p className="text-xs text-rose-300 font-mono mt-1 max-w-xl mx-auto break-words bg-slate-950/80 p-2.5 rounded-lg border border-rose-900/40">
+                  {this.state.error?.message || 'Unknown view exception'}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => this.setState({ hasError: false, error: null })}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg"
+                >
+                  🔄 Refresh View
+                </button>
+                <button
+                  onClick={() => {
+                    this.setState({ hasError: false, error: null });
+                    if (this.props.onReset) this.props.onReset();
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-slate-700"
+                >
+                  ← Back to Overview
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
     }
 
     function App() {
@@ -2001,6 +2078,10 @@
       const [reportVertical, setReportVertical] = useState('ALL');
       const [reportManager, setReportManager] = useState('ALL');
       const [reportSearch, setReportSearch] = useState('');
+
+      // Policy Issuance Ledger States & Filters
+      const [issuanceSearch, setIssuanceSearch] = useState('');
+      const [issuanceTypeFilter, setIssuanceTypeFilter] = useState('ALL');
 
       // Theme State (Default: 'light' as requested)
       const [themeMode, setThemeMode] = useState(() => {
@@ -6346,8 +6427,9 @@
               </div>
             </header>
 
-            {/* Scrollable Main Content Body */}
+            {/* Scrollable Main Content Body with Error Guard */}
             <main className="app-content">
+              <ErrorBoundary onReset={() => setActiveTab('tenant_dashboard')}>
             
             {/* ====================================================== */}
             {/* VIEW 1: 🏢 RENTAL CLIENTS / TENANTS (SUPER ADMIN) */}
@@ -9320,41 +9402,232 @@
               </div>
             )}
 
-            {/* TENANT ISSUANCE */}
-            {viewMode === 'TENANT_WORKSPACE' && activeTab === 'tenant_issuance' && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-bold text-white">Policy Ledger - {selectedTenant.branchLocation}</h2>
-                  {currentUser?.role === 'SUPER_ADMIN' && (
-                    <button onClick={returnToSuperAdmin} className="text-xs text-slate-400 hover:text-white">← Return to Admin</button>
-                  )}
+            {/* TENANT ISSUANCE - BRANCH BUSINESS & POLICY LEDGER */}
+            {viewMode === 'TENANT_WORKSPACE' && activeTab === 'tenant_issuance' && (() => {
+              const branchPols = selectedTenant ? policies.filter(p => !p.branchId || p.branchId === selectedTenant.id) : policies;
+              
+              // Safe stats
+              const totalPoliciesCount = branchPols.length;
+              const totalPremium = branchPols.reduce((s, p) => s + (Number(p.premiumAmount) || 0), 0);
+              const totalEligibleVol = branchPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
+              const distinctAdvisors = new Set(branchPols.map(p => p.agentCode || p.agentName).filter(Boolean)).size;
+
+              // Filtered list
+              const filteredList = branchPols.filter(p => {
+                if (issuanceTypeFilter !== 'ALL' && p.businessType !== issuanceTypeFilter) return false;
+                if (issuanceSearch && issuanceSearch.trim()) {
+                  const q = issuanceSearch.toLowerCase();
+                  const match = (p.policyNumber && p.policyNumber.toLowerCase().includes(q)) ||
+                                (p.customerName && p.customerName.toLowerCase().includes(q)) ||
+                                (p.agentName && p.agentName.toLowerCase().includes(q)) ||
+                                (p.agentCode && p.agentCode.toLowerCase().includes(q)) ||
+                                (p.productName && p.productName.toLowerCase().includes(q));
+                  if (!match) return false;
+                }
+                return true;
+              });
+
+              return (
+                <div className="space-y-4 animate-fadeIn">
+                  {/* Header Banner */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                          Branch Policy Issuance Ledger
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {selectedTenant ? selectedTenant.branchLocation : 'Branch'} ({selectedTenant ? selectedTenant.companyName : 'BMS Portal'})
+                        </span>
+                      </div>
+                      <h2 className="text-lg font-black text-white mt-1 flex items-center space-x-2">
+                        <span>📑 Business & Policy Production Ledger</span>
+                        <span className="text-xs px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-mono font-normal">
+                          {filteredList.length} Policies
+                        </span>
+                      </h2>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => setShowPolicyModal(true)}
+                        className="px-3.5 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-sm flex items-center space-x-1.5 transition"
+                      >
+                        <span>➕</span>
+                        <span>Record Policy</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const exportData = filteredList.map(p => ({
+                            PolicyNo: p.policyNumber || '',
+                            Customer: p.customerName || '',
+                            Product: p.productName || '',
+                            BusinessType: p.businessType || 'New Business',
+                            SumInsured: p.sumInsured || 0,
+                            Premium: p.premiumAmount || 0,
+                            EligibleCredit: p.eligibleVolume ?? p.premiumAmount ?? 0,
+                            Agent: p.agentName || '',
+                            AgentCode: p.agentCode || '',
+                            FLSManager: p.flsName || '',
+                            IssueDate: p.issueDate || '',
+                            Status: p.status || 'Issued'
+                          }));
+                          exportCSV(exportData, 'Policy_Ledger_' + (selectedTenant ? selectedTenant.branchLocation : 'Branch'));
+                        }}
+                        className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-sm flex items-center space-x-1 transition"
+                      >
+                        <span>📥</span>
+                        <span>Export CSV</span>
+                      </button>
+                      {currentUser?.role === 'SUPER_ADMIN' && (
+                        <button onClick={returnToSuperAdmin} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 rounded-xl">
+                          ← Admin
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Policies Issued</span>
+                      <strong className="text-lg font-black text-white font-mono mt-0.5 block">
+                        {totalPoliciesCount}
+                      </strong>
+                      <span className="text-[10px] text-slate-400 font-medium">Logged in ledger</span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-emerald-400 block">Total Actual Premium</span>
+                      <strong className="text-lg font-black text-emerald-400 font-mono mt-0.5 block">
+                        ₹{formatINR(totalPremium)}
+                      </strong>
+                      <span className="text-[10px] text-slate-400">Total gross collection</span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-indigo-400 block">Credited Eligible Volume</span>
+                      <strong className="text-lg font-black text-indigo-300 font-mono mt-0.5 block">
+                        ₹{formatINR(totalEligibleVol)}
+                      </strong>
+                      <span className="text-[10px] text-slate-400">Contest & Club recognized</span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-amber-400 block">Active Producers</span>
+                      <strong className="text-lg font-black text-amber-300 font-mono mt-0.5 block">
+                        {distinctAdvisors} Advisors
+                      </strong>
+                      <span className="text-[10px] text-slate-400">Generating business</span>
+                    </div>
+                  </div>
+
+                  {/* Filter & Search Bar */}
+                  <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex-1 min-w-[200px]">
+                      <input
+                        type="text"
+                        value={issuanceSearch}
+                        onChange={(e) => setIssuanceSearch(e.target.value)}
+                        placeholder="Search policy #, client name, advisor, product..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-1 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                      <span className="text-slate-500 font-semibold text-[11px]">Type:</span>
+                      <select
+                        value={issuanceTypeFilter}
+                        onChange={(e) => setIssuanceTypeFilter(e.target.value)}
+                        className="bg-transparent text-white font-bold focus:outline-none"
+                      >
+                        <option value="ALL">All Business Types</option>
+                        <option value="New Business">New Business</option>
+                        <option value="Portability">Portability</option>
+                        <option value="Renewal">Renewal</option>
+                      </select>
+                    </div>
+
+                    {(issuanceSearch || issuanceTypeFilter !== 'ALL') && (
+                      <button
+                        onClick={() => { setIssuanceSearch(''); setIssuanceTypeFilter('ALL'); }}
+                        className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 rounded-lg"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Policies Table */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                          <tr>
+                            <th className="p-3">Policy No & Date</th>
+                            <th className="p-3">Customer</th>
+                            <th className="p-3">Product</th>
+                            <th className="p-3">Type</th>
+                            <th className="p-3">Premium</th>
+                            <th className="p-3">Eligible Volume</th>
+                            <th className="p-3">Advisor</th>
+                            <th className="p-3">FLS Manager</th>
+                            <th className="p-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {filteredList.length === 0 ? (
+                            <tr>
+                              <td colSpan="9" className="p-8 text-center text-slate-500">
+                                <div className="text-2xl mb-1">📑</div>
+                                <div>No policies found matching your filter criteria.</div>
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredList.map(p => (
+                              <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="p-3">
+                                  <div className="font-mono font-bold text-white">{p.policyNumber || 'N/A'}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono">{p.issueDate || '2026-10-15'}</div>
+                                </td>
+                                <td className="p-3 text-slate-300 font-medium">{p.customerName || 'Direct Client'}</td>
+                                <td className="p-3 text-slate-300">
+                                  <div className="text-white font-medium">{p.productName || 'Comprehensive Health'}</div>
+                                  {p.sumInsured ? (
+                                    <div className="text-[10px] text-slate-500 font-mono">SI: ₹{formatINR(p.sumInsured)}</div>
+                                  ) : null}
+                                </td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    p.businessType === 'Portability' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                    p.businessType === 'Renewal' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                    'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                  }`}>
+                                    {p.businessType || 'New Business'}
+                                  </span>
+                                </td>
+                                <td className="p-3 font-mono font-bold text-white">₹{formatINR(p.premiumAmount)}</td>
+                                <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(p.eligibleVolume ?? p.premiumAmount)}</td>
+                                <td className="p-3 text-slate-300">
+                                  <div>{p.agentName || 'Agent'}</div>
+                                  <span className="text-[10px] text-amber-400/80 font-mono">{p.agentCode || ''}</span>
+                                </td>
+                                <td className="p-3 text-slate-400">{p.flsName || '—'}</td>
+                                <td className="p-3">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
+                                    {p.status || 'In Force'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden p-4">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                      <tr>
-                        <th className="p-3">Policy No</th>
-                        <th className="p-3">Customer</th>
-                        <th className="p-3">Premium</th>
-                        <th className="p-3">Agent</th>
-                        <th className="p-3">Credit Volume</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {policies.map(p => (
-                        <tr key={p.id}>
-                          <td className="p-3 font-mono font-bold text-white">{p.policyNumber}</td>
-                          <td className="p-3 text-slate-300">{p.customerName}</td>
-                          <td className="p-3 font-bold text-white">₹{p.premiumAmount.toLocaleString()}</td>
-                          <td className="p-3 text-slate-300">{p.agentName} ({p.agentCode})</td>
-                          <td className="p-3 font-bold text-emerald-400">₹{p.eligibleVolume.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ========================================================================= */}
             {/* ========================================================================= */}
@@ -11723,10 +11996,12 @@
                 : activeTab === 'tenant_contest_qual' ? 'CONTEST_QUALIFICATION'
                 : activeReportType;
 
+              const branchPolicies = selectedTenant ? policies.filter(p => !p.branchId || p.branchId === selectedTenant.id) : policies;
+
               // Filter logic across all datasets
-              const filteredPolicies = policies.filter(p => {
-                if (reportVertical !== 'ALL' && p.vertical !== reportVertical) return false;
-                if (reportManager !== 'ALL' && p.flsName !== reportManager) return false;
+              const filteredPolicies = branchPolicies.filter(p => {
+                if (reportVertical !== 'ALL' && p.vertical && p.vertical !== reportVertical) return false;
+                if (reportManager !== 'ALL' && p.flsName && p.flsName !== reportManager) return false;
                 if (reportSearch) {
                   const q = reportSearch.toLowerCase();
                   return (p.customerName && p.customerName.toLowerCase().includes(q)) ||
@@ -11738,7 +12013,8 @@
               });
 
               const filteredTeam = branchTeam.filter(m => {
-                if (reportVertical !== 'ALL' && m.vertical !== reportVertical) return false;
+                if (selectedTenant && m.tenantId && m.tenantId !== selectedTenant.id) return false;
+                if (reportVertical !== 'ALL' && m.vertical && m.vertical !== reportVertical) return false;
                 if (reportManager !== 'ALL' && m.reportsToName && !m.reportsToName.includes(reportManager.split(' ')[0])) return false;
                 if (reportSearch) {
                   const q = reportSearch.toLowerCase();
@@ -11750,7 +12026,8 @@
               });
 
               const filteredLeads = leads.filter(l => {
-                if (reportManager !== 'ALL' && l.flsName !== reportManager) return false;
+                if (selectedTenant && l.tenantId && l.tenantId !== selectedTenant.id) return false;
+                if (reportManager !== 'ALL' && l.flsName && l.flsName !== reportManager) return false;
                 if (reportSearch) {
                   const q = reportSearch.toLowerCase();
                   return (l.name && l.name.toLowerCase().includes(q)) ||
@@ -11766,23 +12043,23 @@
                 let filename = currentSubReport + '_Report';
                 if (currentSubReport === 'BRANCH_BUSINESS') {
                   dataToExport = filteredPolicies.map(p => ({
-                    PolicyNumber: p.policyNumber,
-                    CustomerName: p.customerName,
-                    Product: p.productName,
-                    BusinessType: p.businessType,
-                    SumInsured: p.sumInsured,
-                    AnnualPremium: p.annualPremium,
-                    TermYears: p.termYears,
-                    ActualIssued: p.premiumAmount,
-                    EligibleCredit: p.eligibleVolume,
-                    Agent: p.agentName,
-                    FLSManager: p.flsName,
-                    Status: p.status
+                    PolicyNumber: p.policyNumber || '',
+                    CustomerName: p.customerName || '',
+                    Product: p.productName || '',
+                    BusinessType: p.businessType || 'New Business',
+                    SumInsured: p.sumInsured || 0,
+                    AnnualPremium: p.annualPremium || p.premiumAmount || 0,
+                    TermYears: p.termYears || 1,
+                    ActualIssued: p.premiumAmount || 0,
+                    EligibleCredit: p.eligibleVolume ?? p.premiumAmount ?? 0,
+                    Agent: p.agentName || '',
+                    FLSManager: p.flsName || '',
+                    Status: p.status || 'Issued'
                   }));
                 } else if (currentSubReport === 'FLS_PERFORMANCE') {
                   dataToExport = branchTeam.filter(m => m.role === 'SALES_MANAGER').map(sm => {
                     const smPols = filteredPolicies.filter(p => p.flsName === sm.name);
-                    const totalVol = smPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                    const totalVol = smPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                     return {
                       FLSManager: sm.name,
                       Code: sm.code,
@@ -11790,14 +12067,14 @@
                       Vertical: sm.vertical,
                       PoliciesIssued: smPols.length,
                       EligibleVolume: totalVol,
-                      FLSCredit: Math.round(totalVol * (sm.vertical.includes('Digital') ? 1.0 : 0.6)),
+                      FLSCredit: Math.round(totalVol * (sm.vertical && sm.vertical.includes('Digital') ? 1.0 : 0.6)),
                       Status: sm.status
                     };
                   });
                 } else if (currentSubReport === 'TSC_PRODUCTION') {
                   dataToExport = branchTeam.filter(m => m.role === 'TSE').map(tse => {
                     const tsePols = filteredPolicies.filter(p => p.tseName === tse.name);
-                    const totalVol = tsePols.reduce((s, p) => s + p.eligibleVolume, 0);
+                    const totalVol = tsePols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                     return {
                       TSCLeader: tse.name,
                       Code: tse.code,
@@ -11820,7 +12097,7 @@
                       ReportingFLS: ag.reportsToName,
                       Club: ag.clubTier || 'Gold (26%)',
                       PoliciesIssued: agPols.length,
-                      TotalProduction: agPols.reduce((s, p) => s + p.eligibleVolume, 0),
+                      TotalProduction: agPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0),
                       Status: ag.status
                     };
                   });
@@ -11831,10 +12108,10 @@
               };
 
               // Total stats
-              const totalActualIssued = filteredPolicies.reduce((s, p) => s + p.premiumAmount, 0);
-              const totalEligibleVol = filteredPolicies.reduce((s, p) => s + p.eligibleVolume, 0);
-              const newBizVol = filteredPolicies.filter(p => p.businessType === 'New Business').reduce((s, p) => s + p.eligibleVolume, 0);
-              const portRenewalVol = filteredPolicies.filter(p => p.businessType !== 'New Business').reduce((s, p) => s + p.eligibleVolume, 0);
+              const totalActualIssued = filteredPolicies.reduce((s, p) => s + (Number(p.premiumAmount) || 0), 0);
+              const totalEligibleVol = filteredPolicies.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
+              const newBizVol = filteredPolicies.filter(p => p.businessType === 'New Business').reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
+              const portRenewalVol = filteredPolicies.filter(p => p.businessType !== 'New Business').reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
 
               const subReportsList = [
                 { id: 'BRANCH_BUSINESS', icon: '🏢', label: '1. Branch Business' },
@@ -11865,7 +12142,7 @@
                           Comprehensive Intelligence Suite (Section 27)
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">
-                          {selectedTenant.branchLocation} ({selectedTenant.companyName})
+                          {selectedTenant ? selectedTenant.branchLocation : 'Branch'} ({selectedTenant ? selectedTenant.companyName : 'BMS Portal'})
                         </span>
                       </div>
                       <h2 className="text-lg font-black text-white mt-1 flex items-center space-x-2">
@@ -11997,7 +12274,7 @@
                     <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Actual Issuance</span>
                       <strong className="text-lg font-black text-white font-mono mt-0.5 block">
-                        ₹{totalActualIssued.toLocaleString('en-IN')}
+                        ₹{formatINR(totalActualIssued)}
                       </strong>
                       <span className="text-[10px] text-emerald-400 font-medium">100% Policy Cash Collection</span>
                     </div>
@@ -12005,7 +12282,7 @@
                     <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-sky-400 block">Eligible Volume Credit</span>
                       <strong className="text-lg font-black text-sky-400 font-mono mt-0.5 block">
-                        ₹{totalEligibleVol.toLocaleString('en-IN')}
+                        ₹{formatINR(totalEligibleVol)}
                       </strong>
                       <span className="text-[10px] text-slate-400">SI &ge; ₹5L Standard Rule (Sec 11)</span>
                     </div>
@@ -12013,15 +12290,15 @@
                     <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-purple-400 block">New Business Volume</span>
                       <strong className="text-lg font-black text-purple-300 font-mono mt-0.5 block">
-                        ₹{newBizVol.toLocaleString('en-IN')}
+                        ₹{formatINR(newBizVol)}
                       </strong>
-                      <span className="text-[10px] text-slate-400">{Math.round((newBizVol / (totalEligibleVol || 1)) * 100)}% of Eligible Credit</span>
+                      <span className="text-[10px] text-slate-400">{totalEligibleVol > 0 ? Math.round((newBizVol / totalEligibleVol) * 100) : 0}% of Eligible Credit</span>
                     </div>
 
                     <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-amber-400 block">Portability & Renewal</span>
                       <strong className="text-lg font-black text-amber-300 font-mono mt-0.5 block">
-                        ₹{portRenewalVol.toLocaleString('en-IN')}
+                        ₹{formatINR(portRenewalVol)}
                       </strong>
                       <span className="text-[10px] text-emerald-400">Recurring & Inward Premium</span>
                     </div>
@@ -12060,11 +12337,11 @@
                           <tbody className="divide-y divide-slate-800">
                             {filteredPolicies.map(p => (
                               <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber}</td>
-                                <td className="p-3 text-slate-200">{p.customerName}</td>
+                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber || 'N/A'}</td>
+                                <td className="p-3 text-slate-200">{p.customerName || 'Direct Client'}</td>
                                 <td className="p-3">
-                                  <div className="text-white font-semibold">{p.productName}</div>
-                                  <span className="text-[10px] text-slate-500 font-mono">{p.productCode} • {p.insurer}</span>
+                                  <div className="text-white font-semibold">{p.productName || 'Insurance Product'}</div>
+                                  <span className="text-[10px] text-slate-500 font-mono">{p.productCode || 'POL'} • {p.insurer || 'ManipalCigna'}</span>
                                 </td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -12072,19 +12349,19 @@
                                     p.businessType === 'Portability' ? 'bg-amber-500/20 text-amber-300' :
                                     'bg-emerald-500/20 text-emerald-300'
                                   }`}>
-                                    {p.businessType}
+                                    {p.businessType || 'New Business'}
                                   </span>
                                 </td>
-                                <td className="p-3 font-mono text-slate-300">₹{p.sumInsured.toLocaleString('en-IN')}</td>
-                                <td className="p-3 font-mono text-slate-300">{p.termYears} Yr</td>
-                                <td className="p-3 font-mono font-bold text-white">₹{p.premiumAmount.toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono text-slate-300">₹{formatINR(p.sumInsured || 0)}</td>
+                                <td className="p-3 font-mono text-slate-300">{p.termYears || 1} Yr</td>
+                                <td className="p-3 font-mono font-bold text-white">₹{formatINR(p.premiumAmount)}</td>
                                 <td className="p-3 font-mono font-bold text-emerald-400">
-                                  {p.eligibleVolume > 0 ? `₹${p.eligibleVolume.toLocaleString('en-IN')}` : <span className="text-rose-400">₹0 (SI &lt; 5L)</span>}
+                                  {(Number(p.eligibleVolume ?? p.premiumAmount) || 0) > 0 ? ('₹' + formatINR(p.eligibleVolume ?? p.premiumAmount)) : <span className="text-rose-400">₹0 (SI &lt; 5L)</span>}
                                 </td>
-                                <td className="p-3 font-mono text-purple-300">₹{p.flsCredit.toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono text-purple-300">₹{formatINR(p.flsCredit ?? (p.eligibleVolume ?? p.premiumAmount ?? 0) * 0.6)}</td>
                                 <td className="p-3 text-slate-300">
-                                  <div>{p.agentName}</div>
-                                  <span className="text-[10px] text-slate-500 font-mono">{p.agentCode}</span>
+                                  <div>{p.agentName || 'Agent'}</div>
+                                  <span className="text-[10px] text-slate-500 font-mono">{p.agentCode || ''}</span>
                                 </td>
                               </tr>
                             ))}
@@ -12110,8 +12387,8 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.filter(m => m.role === 'SALES_MANAGER').map(sm => {
                               const smPols = filteredPolicies.filter(p => p.flsName === sm.name);
-                              const totalVol = smPols.reduce((s, p) => s + p.eligibleVolume, 0);
-                              const flsCreditRate = sm.vertical.includes('Digital') ? 1.0 : 0.6;
+                              const totalVol = smPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
+                              const flsCreditRate = sm.vertical && sm.vertical.includes('Digital') ? 1.0 : 0.6;
                               const flsCredit = Math.round(totalVol * flsCreditRate);
                               const quota = 250000;
                               const pct = Math.min(100, Math.round((totalVol / quota) * 100));
@@ -12125,16 +12402,16 @@
                                   <td className="p-3 text-slate-300">{sm.territory}</td>
                                   <td className="p-3">
                                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
-                                      {sm.vertical.replace(' Vertical', '')}
+                                      {(sm.vertical || '').replace(' Vertical', '')}
                                     </span>
                                   </td>
                                   <td className="p-3 text-slate-300">
-                                    {branchTeam.filter(m => m.reportsToId === sm.id || m.reportsToName.includes(sm.code)).length} Advisors
+                                    {branchTeam.filter(m => m.reportsToId === sm.id || (m.reportsToName && m.reportsToName.includes(sm.code))).length} Advisors
                                   </td>
                                   <td className="p-3 font-mono text-white font-bold">{smPols.length} Policies</td>
-                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{totalVol.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(totalVol)}</td>
                                   <td className="p-3 font-mono text-purple-300">
-                                    ₹{flsCredit.toLocaleString('en-IN')} ({flsCreditRate * 100}%)
+                                    ₹{formatINR(flsCredit)} ({flsCreditRate * 100}%)
                                   </td>
                                   <td className="p-3">
                                     <div className="flex items-center space-x-2">
@@ -12169,7 +12446,7 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.filter(m => m.role === 'TSE').map(tse => {
                               const tsePols = filteredPolicies.filter(p => p.tseName === tse.name);
-                              const totalVol = tsePols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const totalVol = tsePols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                               const isOver6m = tse.joinedDate < '2026-03-01';
                               const slabRate = isOver6m ? 0.075 : 0.05;
                               const estIncentive = Math.round(totalVol * slabRate);
@@ -12182,11 +12459,11 @@
                                   </td>
                                   <td className="p-3 text-slate-300">{tse.reportsToName}</td>
                                   <td className="p-3 text-slate-300">{tse.territory}</td>
-                                  <td className="p-3 text-slate-400">{tse.vertical.replace(' Vertical', '')}</td>
-                                  <td className="p-3 font-mono text-slate-300">{isOver6m ? '&gt; 6 Months' : '0–6 Months'}</td>
-                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{totalVol.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 text-slate-400">{(tse.vertical || '').replace(' Vertical', '')}</td>
+                                  <td className="p-3 font-mono text-slate-300">{isOver6m ? '> 6 Months' : '0–6 Months'}</td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(totalVol)}</td>
                                   <td className="p-3 font-mono font-bold text-purple-300">{slabRate * 100}%</td>
-                                  <td className="p-3 font-mono font-bold text-amber-300">₹{estIncentive.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-amber-300">₹{formatINR(estIncentive)}</td>
                                 </tr>
                               );
                             })}
@@ -12212,7 +12489,7 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.filter(m => m.role === 'AGENT').map(ag => {
                               const agPols = filteredPolicies.filter(p => p.agentName === ag.name || p.agentCode === ag.code);
-                              const totalVol = agPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const totalVol = agPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
 
                               return (
                                 <tr key={ag.id} className="hover:bg-slate-800/40 transition-colors">
@@ -12221,9 +12498,9 @@
                                     <span className="text-[10px] text-amber-400 font-mono">{ag.code}</span>
                                   </td>
                                   <td className="p-3 text-slate-300">{ag.agentType || 'Direct Agent 1A'}</td>
-                                  <td className="p-3 text-slate-400">{ag.reportsToName}</td>
+                                  <td className="p-3 text-slate-400">{ag.reportsToName || '—'}</td>
                                   <td className="p-3 font-mono text-white font-bold">{agPols.length} Policies</td>
-                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{totalVol.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(totalVol)}</td>
                                   <td className="p-3">
                                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                                       {ag.clubTier || 'Gold (26%)'}
@@ -12259,18 +12536,18 @@
                           <tbody className="divide-y divide-slate-800">
                             {products.map(prod => {
                               const prodPols = filteredPolicies.filter(p => p.productName === prod.name || p.productCode === prod.code);
-                              const actualSum = prodPols.reduce((s, p) => s + p.premiumAmount, 0);
-                              const eligibleSum = prodPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const actualSum = prodPols.reduce((s, p) => s + (Number(p.premiumAmount) || 0), 0);
+                              const eligibleSum = prodPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                               const share = totalActualIssued > 0 ? Math.round((actualSum / totalActualIssued) * 100) : 0;
 
                               return (
                                 <tr key={prod.id} className="hover:bg-slate-800/40 transition-colors">
                                   <td className="p-3 font-bold text-white">{prod.name}</td>
                                   <td className="p-3 font-mono text-sky-400">{prod.code} • {prod.insurer}</td>
-                                  <td className="p-3 text-[11px] font-mono text-slate-300">{prod.siCreditRule}</td>
-                                  <td className="p-3 font-mono font-bold text-white">₹{actualSum.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 text-[11px] font-mono text-slate-300">{prod.siCreditRule || 'Standard'}</td>
+                                  <td className="p-3 font-mono font-bold text-white">₹{formatINR(actualSum)}</td>
                                   <td className="p-3 font-mono font-bold text-emerald-400">
-                                    {eligibleSum > 0 ? `₹${eligibleSum.toLocaleString('en-IN')}` : <span className="text-rose-400">₹0 (SI &lt; 5L)</span>}
+                                    {eligibleSum > 0 ? ('₹' + formatINR(eligibleSum)) : <span className="text-rose-400">₹0 (SI &lt; 5L)</span>}
                                   </td>
                                   <td className="p-3 font-mono text-slate-300">{prodPols.length} Policies</td>
                                   <td className="p-3 font-mono text-indigo-300 font-bold">{share}%</td>
@@ -12299,14 +12576,14 @@
                           <tbody className="divide-y divide-slate-800">
                             {filteredPolicies.filter(p => p.businessType === 'Portability').map(p => (
                               <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber}</td>
-                                <td className="p-3 text-slate-200">{p.customerName}</td>
-                                <td className="p-3 text-slate-300">{p.productName}</td>
-                                <td className="p-3 font-mono text-slate-300">₹{p.sumInsured.toLocaleString('en-IN')}</td>
-                                <td className="p-3 font-mono font-bold text-amber-400">₹{p.premiumAmount.toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber || 'N/A'}</td>
+                                <td className="p-3 text-slate-200">{p.customerName || 'Direct Client'}</td>
+                                <td className="p-3 text-slate-300">{p.productName || 'Comprehensive Health'}</td>
+                                <td className="p-3 font-mono text-slate-300">₹{formatINR(p.sumInsured || 0)}</td>
+                                <td className="p-3 font-mono font-bold text-amber-400">₹{formatINR(p.premiumAmount || 0)}</td>
                                 <td className="p-3 font-mono text-emerald-400 font-bold">100.0%</td>
-                                <td className="p-3 font-mono font-bold text-emerald-400">₹{p.eligibleVolume.toLocaleString('en-IN')}</td>
-                                <td className="p-3 text-slate-300">{p.agentName}</td>
+                                <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(p.eligibleVolume ?? p.premiumAmount ?? 0)}</td>
+                                <td className="p-3 text-slate-300">{p.agentName || 'Advisor'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -12331,10 +12608,10 @@
                           <tbody className="divide-y divide-slate-800">
                             {filteredPolicies.filter(p => p.businessType === 'Renewal').map(p => (
                               <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber}</td>
-                                <td className="p-3 text-slate-200">{p.customerName}</td>
-                                <td className="p-3 text-slate-300">{p.productName}</td>
-                                <td className="p-3 font-mono font-bold text-emerald-400">₹{p.premiumAmount.toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono font-bold text-white">{p.policyNumber || 'N/A'}</td>
+                                <td className="p-3 text-slate-200">{p.customerName || 'Direct Client'}</td>
+                                <td className="p-3 text-slate-300">{p.productName || 'Comprehensive Health'}</td>
+                                <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(p.premiumAmount || 0)}</td>
                                 <td className="p-3 font-mono text-sky-300 font-bold">91.4% (13th Month)</td>
                                 <td className="p-3 font-mono text-emerald-300">₹0</td>
                                 <td className="p-3 font-mono text-emerald-400 font-bold">0.0% Loss Ratio</td>
@@ -12443,7 +12720,7 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.filter(m => m.role === 'AGENT').map((ag, i) => {
                               const agPols = filteredPolicies.filter(p => p.agentName === ag.name || p.agentCode === ag.code);
-                              const vol = agPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const vol = agPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                               const upgradedClub = vol >= 140000 ? "Chairman's Elite (40%)" : vol >= 60000 ? "Diamond (34%)" : "Gold (26%)";
                               const openingSlab = 20;
                               const newSlab = vol >= 140000 ? 40 : vol >= 60000 ? 34 : 26;
@@ -12456,7 +12733,7 @@
                                     <span className="text-[10px] text-amber-400 font-mono">{ag.code}</span>
                                   </td>
                                   <td className="p-3 text-slate-300">Silver (20%)</td>
-                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{vol.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(vol)}</td>
                                   <td className="p-3 font-bold text-amber-300">{upgradedClub}</td>
                                   <td className="p-3 font-mono font-bold text-white">{newSlab}.0%</td>
                                   <td className="p-3 font-mono font-bold text-emerald-400">+{diff}.0% Diff</td>
@@ -12485,7 +12762,7 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.filter(m => m.role === 'AGENT').map(ag => {
                               const agPols = filteredPolicies.filter(p => p.agentName === ag.name || p.agentCode === ag.code);
-                              const vol = agPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const vol = agPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                               const baseComm = Math.round(vol * 0.20);
                               const diffComm = Math.round(vol * 0.06);
                               const totalDue = baseComm + diffComm;
@@ -12496,11 +12773,11 @@
                                     <div>{ag.name}</div>
                                     <span className="text-[10px] text-amber-400 font-mono">{ag.code}</span>
                                   </td>
-                                  <td className="p-3 font-mono font-bold text-white">₹{vol.toLocaleString('en-IN')}</td>
-                                  <td className="p-3 font-mono text-slate-300">₹{baseComm.toLocaleString('en-IN')} (20%)</td>
-                                  <td className="p-3 font-mono text-emerald-400 font-bold">+₹{diffComm.toLocaleString('en-IN')} (6% Diff)</td>
-                                  <td className="p-3 font-mono font-black text-amber-300">₹{totalDue.toLocaleString('en-IN')}</td>
-                                  <td className="p-3 font-mono text-emerald-400">₹{totalDue.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-white">₹{formatINR(vol)}</td>
+                                  <td className="p-3 font-mono text-slate-300">₹{formatINR(baseComm)} (20%)</td>
+                                  <td className="p-3 font-mono text-emerald-400 font-bold">+₹{formatINR(diffComm)} (6% Diff)</td>
+                                  <td className="p-3 font-mono font-black text-amber-300">₹{formatINR(totalDue)}</td>
+                                  <td className="p-3 font-mono text-emerald-400">₹{formatINR(totalDue)}</td>
                                   <td className="p-3">
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
                                       ✓ Payout Reconciled
@@ -12531,7 +12808,7 @@
                           <tbody className="divide-y divide-slate-800">
                             {branchTeam.map(mem => {
                               const memPols = filteredPolicies.filter(p => p.agentName === mem.name || p.flsName === mem.name);
-                              const vol = memPols.reduce((s, p) => s + p.eligibleVolume, 0);
+                              const vol = memPols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                               const target = 100000;
                               const pct = Math.min(100, Math.round((vol / target) * 100));
                               const deficit = Math.max(0, target - vol);
@@ -12542,9 +12819,9 @@
                                   <td className="p-3 font-bold text-white">{mem.name}</td>
                                   <td className="p-3 text-purple-300 font-semibold">HOH (Hall of Heroes) Q3</td>
                                   <td className="p-3 font-mono text-white">₹1,00,000</td>
-                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{vol.toLocaleString('en-IN')}</td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">₹{formatINR(vol)}</td>
                                   <td className="p-3 font-mono font-bold text-white">{pct}%</td>
-                                  <td className="p-3 font-mono text-rose-300">{deficit > 0 ? `₹${deficit.toLocaleString('en-IN')}` : '0 (Goal Met)'}</td>
+                                  <td className="p-3 font-mono text-rose-300">{deficit > 0 ? ('₹' + formatINR(deficit)) : '0 (Goal Met)'}</td>
                                   <td className="p-3 text-amber-300 font-semibold">{pct >= 100 ? '5-Star Convention Ticket' : 'Pending Goal Completion'}</td>
                                   <td className="p-3">
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -12632,7 +12909,7 @@
                                 <td className="p-3 text-slate-400">{l.source}</td>
                                 <td className="p-3 text-indigo-400">{l.flsName}</td>
                                 <td className="p-3 font-mono text-white font-bold">
-                                  {l.expectedAmount > 0 ? `₹${l.expectedAmount.toLocaleString('en-IN')}` : 'Recruitment Pipeline'}
+                                  {l.expectedAmount > 0 ? ('₹' + formatINR(l.expectedAmount)) : 'Recruitment Pipeline'}
                                 </td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -13151,7 +13428,7 @@
                 </div>
               </div>
             )}
-
+            </ErrorBoundary>
           </main>
         </div>
 
@@ -19254,6 +19531,101 @@
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+
+  <!-- Instant Engine Launcher with IndexedDB JSX Cache -->
+  <script>
+    (function() {
+      var sourceEl = document.getElementById('app-source');
+      if (!sourceEl) return;
+      var rawCode = sourceEl.textContent;
+
+      // Fast 32-bit hash
+      var hash = 0;
+      for (var i = 0; i < rawCode.length; i++) {
+        hash = ((hash << 5) - hash) + rawCode.charCodeAt(i);
+        hash |= 0;
+      }
+      var buildKey = 'bms_build_' + (hash >>> 0).toString(16);
+
+      function openDB() {
+        return new Promise(function(resolve) {
+          if (!window.indexedDB) return resolve(null);
+          var req = indexedDB.open('bms_engine_cache', 1);
+          req.onupgradeneeded = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('scripts')) {
+              db.createObjectStore('scripts');
+            }
+          };
+          req.onsuccess = function() { resolve(req.result); };
+          req.onerror = function() { resolve(null); };
+        });
+      }
+
+      function getCached(db, key) {
+        return new Promise(function(resolve) {
+          if (!db) return resolve(null);
+          try {
+            var tx = db.transaction('scripts', 'readonly');
+            var req = tx.objectStore('scripts').get(key);
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror = function() { resolve(null); };
+          } catch (e) { resolve(null); }
+        });
+      }
+
+      function setCached(db, key, val) {
+        if (!db) return;
+        try {
+          var tx = db.transaction('scripts', 'readwrite');
+          tx.objectStore('scripts').put(val, key);
+        } catch (e) {}
+      }
+
+      function runCode(code) {
+        var s = document.createElement('script');
+        s.type = 'text/javascript';
+        s.textContent = code;
+        document.body.appendChild(s);
+      }
+
+      function compileAndRun(db) {
+        var statusEl = document.getElementById('app-loading-status');
+        if (statusEl) statusEl.innerText = 'Optimizing portal components...';
+        
+        function tryCompile() {
+          if (!window.Babel) {
+            setTimeout(tryCompile, 30);
+            return;
+          }
+          try {
+            var compiled = window.Babel.transform(rawCode, {
+              presets: [['react', { runtime: 'classic' }]],
+              compact: true
+            }).code;
+            if (db) setCached(db, buildKey, compiled);
+            runCode(compiled);
+          } catch (err) {
+            console.error('Portal compilation error:', err);
+            if (statusEl) statusEl.innerText = 'Error compiling components: ' + err.message;
+          }
+        }
+        tryCompile();
+      }
+
+      openDB().then(function(db) {
+        return getCached(db, buildKey).then(function(cached) {
+          if (cached) {
+            runCode(cached);
+          } else {
+            compileAndRun(db);
+          }
+        });
+      }).catch(function() {
+        compileAndRun(null);
+      });
+    })();
   </script>
 </body>
 </html>
