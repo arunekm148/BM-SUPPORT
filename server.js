@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
     // 1. Super Admin: sees all renewals across branches
     // 2. Branch Manager: sees all renewals for their branch (all FLS, TSE, agents included)
     // 3. FLS Manager (SALES_MANAGER): sees only renewals for agents assigned directly to them OR under their supervised TSEs
-    // 4. TSC / DL Leader (TSE): sees only renewals for agents assigned under them
+    // 4. TSE / DL Leader (TSE): sees only renewals for agents assigned under them
     // 5. Agent (AGENT): sees only their own renewals
     if (role === 'SUPER_ADMIN') {
       if (query.branchId && query.branchId !== 'ALL') {
@@ -128,7 +128,7 @@ const server = http.createServer(async (req, res) => {
         return matchesCode || matchesId || matchesName;
       });
     } else if (role === 'TSE') {
-      // TSC / DL Leader: sees renewals where tseCode matches employeeId or tseId matches userId
+      // TSE / DL Leader: sees renewals where tseCode matches employeeId or tseId matches userId
       records = records.filter(r => {
         const matchesCode = Boolean(employeeId && r.tseCode === employeeId);
         const matchesId = Boolean(userId && r.tseId === userId);
@@ -144,7 +144,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // Granular Filtering (Branch Manager / FLS / TSC filter options)
+    // Granular Filtering (Branch Manager / FLS / TSE filter options)
     if (query.flsFilter && query.flsFilter !== 'ALL') {
       records = records.filter(r => r.flsId === query.flsFilter || r.flsCode === query.flsFilter || r.flsName === query.flsFilter);
     }
@@ -1133,7 +1133,7 @@ const server = http.createServer(async (req, res) => {
 
       const { memberId, role, assignedAgentCount = 0, subordinateCount = 0 } = payload;
 
-      // RULE 1: FLS or TSC/DL can be deleted ONLY when they have zero assigned agents!
+      // RULE 1: FLS or TSE/DL can be deleted ONLY when they have zero assigned agents!
       if ((role === 'SALES_MANAGER' || role === 'TSE') && assignedAgentCount > 0) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({

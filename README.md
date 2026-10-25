@@ -1,9 +1,9 @@
 # BMS Chat - Insurance Agency Business Management System
 
-A unified, high-performance web and mobile collaboration platform designed for **Branch Managers**, **Frontline Sales Managers (FLS)**, **Distribution Leaders (TSC/DL)**, **Insurance Agents**, and **Super Admins**.
+A unified, high-performance web and mobile collaboration platform designed for **Branch Managers**, **Frontline Sales Managers (FLS)**, **Distribution Leaders (TSE/DL)**, **Insurance Agents**, and **Super Admins**.
 
 BMS Chat integrates the complete agency business lifecycle:
-**Agent/TSC Recruitment → Lead Follow-up → Agent Activation → Business Issuance → Business Credit Attribution → 7 Quarterly Clubs → Commission Differential → TSC Incentives → Contests & Millionaire Honors → Real-time Collaboration Chat.**
+**Agent/TSE Recruitment → Lead Follow-up → Agent Activation → Business Issuance → Business Credit Attribution → 7 Quarterly Clubs → Commission Differential → TSE Incentives → Contests & Millionaire Honors → Real-time Collaboration Chat.**
 
 ---
 
@@ -45,7 +45,7 @@ http://localhost:3000
   - `#leads-and-recruitment`: Lead pipeline referrals, 1A/1B candidate updates. Automated alerts broadcast whenever new leads are entered.
   - `#contest-celebrations`: Millionaire circle, Lakhpati qualifiers, and quarterly club upgrades. Automatically broadcasts new policy issuances.
 - **Direct Messaging (1-on-1):**
-  - Seamless direct messaging between Branch Managers, FLS Managers, TSCs, and Agents.
+  - Seamless direct messaging between Branch Managers, FLS Managers, TSEs, and Agents.
   - Filter messages instantly by active channel or recipient persona.
 
 ### 2. 👥 User Hierarchy & Persona Switcher
@@ -53,8 +53,8 @@ Switch between live profiles directly in the top bar to test and experience the 
 - **Marcus Vance:** Branch Manager (Metro Central Branch)
 - **Vikram Malhotra:** Frontline Sales Manager (Branch Agency Vertical)
 - **Ananya Sen:** Frontline Sales Manager (Digital Agency Vertical)
-- **Rohan Deshmukh:** Distribution Leader / TSC (4 Months Tenure - Accelerated 0–6m bonus)
-- **Kavita Rao:** Distribution Leader / TSC (14 Months Tenure - Standard slab)
+- **Rohan Deshmukh:** Distribution Leader / TSE (4 Months Tenure - Accelerated 0–6m bonus)
+- **Kavita Rao:** Distribution Leader / TSE (14 Months Tenure - Standard slab)
 - **Suresh Nair:** Insurance Agent (AG-101 • 1A Category • Gold Club)
 - **Meera Patel:** Insurance Agent (AG-102 • 1B Category • Platinum Club)
 - **Arjun Reddy:** Insurance Agent (AG-103 • Standalone • Diamond Club • Repeat Millionaire)
@@ -62,9 +62,9 @@ Switch between live profiles directly in the top bar to test and experience the 
 
 ### 3. 🎯 Unified Lead Management Pipeline
 - **3 Categories:**
-  - **Business Leads:** Self-generated, Existing agent, TSC/DL generated, BM referrals.
-  - **Agent Recruitment Leads:** 1A, 1B, Standalone, TSC referrals.
-  - **Distribution Leader Leads:** Direct TSC recruitment, TSC referrals.
+  - **Business Leads:** Self-generated, Existing agent, TSE/DL generated, BM referrals.
+  - **Agent Recruitment Leads:** 1A, 1B, Standalone, TSE referrals.
+  - **Distribution Leader Leads:** Direct TSE recruitment, TSE referrals.
 - **Features:**
   - Status tracking: `New`, `Contacted`, `Interested`, `Follow-up`, `Converted`, `Lost`.
   - Unlimited dated progress history and comments.
@@ -82,9 +82,9 @@ Switch between live profiles directly in the top bar to test and experience the 
   - 3 Years = 3x multiplier
 - **Role Credit Attribution Formulas:**
   - **Agent:** 100% of Net Eligible Volume.
-  - **TSC/DL:** 100% of volume on direct and team business.
-  - **Branch Agency FLS:** **60%** on TSC-generated business; 100% on direct agent business.
-  - **Digital Agency FLS:** **100%** on digital TSC business.
+  - **TSE/DL:** 100% of volume on direct and team business.
+  - **Branch Agency FLS:** **60%** on TSE-generated business; 100% on direct agent business.
+  - **Digital Agency FLS:** **100%** on digital TSE business.
   - **Branch Manager:** **100%** on all branch issuances.
 
 ### 5. 🏆 7 Quarterly Agent Club Matrix & Differential Payout
@@ -103,7 +103,7 @@ Switch between live profiles directly in the top bar to test and experience the 
 - Live progress bars, balance-to-qualify calculations, and rewards.
 
 ### 7. 📝 Manager Daily Activities & Coaching
-- Log Customer Calls, Agent Calls, TSC Visits, Recruitment Meetings, and expected business.
+- Log Customer Calls, Agent Calls, TSE Visits, Recruitment Meetings, and expected business.
 - Branch Manager review section to provide coaching feedback notes.
 
 ### 8. 🛡️ Data Privacy, NDA & Legal Governance

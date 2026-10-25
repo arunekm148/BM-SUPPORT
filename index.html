@@ -278,7 +278,7 @@
         summary: 'Commercial rental for active branches with club incentive calculation.',
         features: [
           'Up to 2 Branch Licenses',
-          'Up to 50 Agents & TSCs',
+          'Up to 50 Agents & TSEs',
           '7 Quarterly Clubs Engine & Differential',
           'Credit Split Allocation (60% / 100%)',
           'Priority Support'
@@ -297,7 +297,7 @@
           'Up to 5 Branch Licenses',
           'Up to 150 Active Agents',
           'Millionaire Circle & Contests',
-          'Direct FLS & TSC Leadership Tree',
+          'Direct FLS & TSE Leadership Tree',
           'CSV/Excel Data Exports & Audit Logs'
         ]
       },
@@ -902,7 +902,7 @@
 
       // Quick filter pill for Agent Activation Directory
       const [agentActiveFilterTab, setAgentActiveFilterTab] = useState('ALL');
-      const [topPerfTab, setTopPerfTab] = useState('AGENTS'); // 'AGENTS' | 'FLS' | 'TSC'
+      const [topPerfTab, setTopPerfTab] = useState('AGENTS'); // 'AGENTS' | 'FLS' | 'TSE'
 
       // ========================================================
       // CENTRALIZED RENEWAL MODULE STATE & REST API INTEGRATION
@@ -1092,7 +1092,7 @@
             (r.flsName && currentUser.name && r.flsName.toLowerCase() === currentUser.name.toLowerCase())
           );
         } else if (currentUser.role === 'TSE') {
-          // TSC / DL Leader sees only renewals belonging to agents assigned under them
+          // TSE / DL Leader sees only renewals belonging to agents assigned under them
           base = renewals.filter(r =>
             r.tseCode === currentUser.employeeId ||
             r.tseId === currentUser.userId ||
@@ -2203,7 +2203,7 @@
       const [showCreateMemberModal, setShowCreateMemberModal] = useState(false);
       const [memberForm, setMemberForm] = useState({
         role: 'AGENT',
-        reportingType: 'TSC', // 'TSC' (Direct Reportee to BM) | 'FLS' (Direct Reportee to BM)
+        reportingType: 'TSE', // 'TSE' (Direct Reportee to BM) | 'FLS' (Direct Reportee to BM)
         name: '',
         code: '',
         email: '',
@@ -2265,8 +2265,9 @@
       const [agentImportSearch, setAgentImportSearch] = useState('');
       const [agentImportStatusFilter, setAgentImportStatusFilter] = useState('ALL'); // 'ALL' | 'NEW' | 'UPDATE'
       const [agentImportTargetRole, setAgentImportTargetRole] = useState('AGENT');
-      const [agentImportDefaultReportingType, setAgentImportDefaultReportingType] = useState('TSC');
+      const [agentImportDefaultReportingType, setAgentImportDefaultReportingType] = useState('TSE');
       const [agentImportDefaultLeaderId, setAgentImportDefaultLeaderId] = useState('');
+      const [bulkLeaderId, setBulkLeaderId] = useState('');
 
       // Filtered Tenants
       const filteredTenants = useMemo(() => {
@@ -2595,7 +2596,7 @@
         
         let repId = 'bm-head';
         let repName = selectedTenant ? `${selectedTenant.contactPerson} (Branch Manager)` : 'Branch Manager';
-        let repType = 'TSC';
+        let repType = 'TSE';
         
         if (targetRole === 'TSE') {
           repType = 'BM';
@@ -2603,7 +2604,7 @@
           repName = selectedTenant ? `${selectedTenant.contactPerson} (Branch Manager)` : 'Branch Manager';
         } else if (targetRole === 'AGENT') {
           if (tseList.length > 0) {
-            repType = 'TSC';
+            repType = 'TSE';
             repId = tseList[0].id;
             repName = `${tseList[0].name} (${tseList[0].code})`;
           } else if (smList.length > 0) {
@@ -2668,7 +2669,7 @@
             repName = `${parent.name} (${parent.code})`;
             repRole = parent.role === 'TSE' ? 'TSE' : 'SALES_MANAGER';
           } else {
-            repRole = memberForm.reportingType === 'TSC' ? 'TSE' : 'SALES_MANAGER';
+            repRole = (memberForm.reportingType === 'TSE' || memberForm.reportingType === 'TSC') ? 'TSE' : 'SALES_MANAGER';
           }
         }
 
@@ -2999,11 +3000,51 @@
           for (const alias of aliases) {
             const cleanAlias = alias.toLowerCase().replace(/[\s_\-#.]+/g, '');
             if (cleanKey === cleanAlias) {
-              return String(row[key] || '').trim();
+              let val = String(row[key] !== undefined && row[key] !== null ? row[key] : '').trim();
+              // Prevent exponential scientific notation corruption (e.g. 1.14924E+01 -> 1149248-01 / clean number)
+              if (/^[0-9.]+[eE][+-]?[0-9]+$/.test(val)) {
+                try {
+                  const num = Number(val);
+                  if (!isNaN(num) && Number.isFinite(num)) {
+                    val = num.toLocaleString('fullwide', { useGrouping: false });
+                  }
+                } catch (e) {}
+              }
+              // Strip trailing .0 from integers parsed by Excel
+              if (/^\d+\.0+$/.test(val)) {
+                val = val.replace(/\.0+$/, '');
+              }
+              return val;
             }
           }
         }
         return '';
+      };
+
+      // Bulk Apply Selected Leader to All Staged Rows in Review Screen
+      const handleApplyBulkLeader = () => {
+        if (!bulkLeaderId) {
+          showToast('Please select a leader to apply to all rows.', 'warning');
+          return;
+        }
+        const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+        const isDirectBM = bulkLeaderId === 'DIRECT_BM' || bulkLeaderId === 'bm-direct';
+        const leaderObj = teamPool.find(m => m.id === bulkLeaderId);
+
+        const targetId = isDirectBM ? 'bm-direct' : (leaderObj ? leaderObj.id : '');
+        const targetName = isDirectBM ? 'Direct to Branch Manager' : (leaderObj ? `${leaderObj.name} (${leaderObj.code})` : '');
+        const targetRole = isDirectBM ? 'BRANCH_MANAGER' : (leaderObj ? leaderObj.role : 'TSE');
+        const targetReportingType = isDirectBM ? 'BM' : (targetRole === 'SALES_MANAGER' ? 'FLS' : 'TSE');
+
+        setAgentImportStagingRows(prev => prev.map(row => ({
+          ...row,
+          reportsToId: targetId,
+          reportsToName: targetName,
+          reportsToRole: targetRole,
+          reportingType: targetReportingType
+        })));
+
+        showToast(`⚡ Updated all ${agentImportStagingRows.length} agents to report to: ${targetName}`, 'success');
       };
 
       // Handler: File Upload (Excel or CSV)
@@ -3021,10 +3062,10 @@
             let rawData = [];
             if (isExcel && window.XLSX) {
               const arrayBuffer = loadEvent.target.result;
-              const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+              const workbook = window.XLSX.read(arrayBuffer, { type: 'array', cellText: true, cellDates: true });
               const firstSheetName = workbook.SheetNames[0];
               const worksheet = workbook.Sheets[firstSheetName];
-              rawData = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+              rawData = window.XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
             } else {
               const textContent = typeof loadEvent.target.result === 'string'
                 ? loadEvent.target.result
@@ -3037,45 +3078,51 @@
               return;
             }
 
-            // Find current leaders for auto-assignment
-            const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
-            const flsList = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
+            // Pool of leaders in branch
+            const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+            const tseList = teamPool.filter(m => m.role === 'TSE');
+            const flsList = teamPool.filter(m => m.role === 'SALES_MANAGER');
             const defaultTse = tseList[0] || null;
             const defaultFls = flsList[0] || null;
+
+            // Check if user pre-selected a leader in the upload modal
+            const isPreselectedDirectBM = agentImportDefaultLeaderId === 'DIRECT_BM' || agentImportDefaultLeaderId === 'bm-direct';
+            const preselectedLeader = teamPool.find(m => m.id === agentImportDefaultLeaderId) || null;
 
             // Process each raw row and match against existing branchTeam
             const staged = rawData.map((row, index) => {
               const tempId = `stage-${Date.now()}-${index}`;
 
               // Extracted fields
-              const rawCode = extractRowVal(row, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id']);
-              const rawName = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor']);
+              let rawCode = extractRowVal(row, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id', 'agent_code', 'agent code', 'advisor code']);
+              let rawName = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor', 'agent_name', 'agent name', 'full_name']);
               const rawPhone = extractRowVal(row, ['phone', 'phonenumber', 'mobile', 'mobileno', 'contact', 'contactno', 'tel', 'cell']);
               const rawEmail = extractRowVal(row, ['email', 'emailid', 'mail', 'emailaddress']);
               const rawReporting = extractRowVal(row, ['reportingtype', 'type', 'hierarchy', 'segment', 'channel', 'role']);
-              const rawLeader = extractRowVal(row, ['leader', 'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reportstoname']);
+              const rawLeader = extractRowVal(row, ['leader', 'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reportstoname', 'dl']);
               const rawDate = extractRowVal(row, ['date', 'joineddate', 'codingdate', 'doj', 'createddate', 'created_at']);
               const rawTerritory = extractRowVal(row, ['territory', 'location', 'branch', 'region', 'area']);
 
-              // Normalize Reporting Type: TSC vs FLS
-              let reportingType = 'TSC';
-              const repLower = (rawReporting || '').toLowerCase();
-              if (repLower.includes('fls') || repLower.includes('sm') || repLower.includes('direct sales')) {
-                reportingType = 'FLS';
-              } else if (repLower.includes('tsc') || repLower.includes('tse') || repLower.includes('dl')) {
-                reportingType = 'TSC';
-              } else {
-                reportingType = agentImportDefaultReportingType || 'TSC';
+              // Flexible fallback if only 2 columns present without standard headers
+              const rowKeys = Object.keys(row);
+              if (!rawCode && !rawName && rowKeys.length >= 2) {
+                rawCode = String(row[rowKeys[0]] || '').trim();
+                rawName = String(row[rowKeys[1]] || '').trim();
+              } else if (!rawCode && rowKeys.length === 2) {
+                const otherKey = rowKeys.find(k => k !== rowKeys[1]);
+                if (otherKey) rawCode = String(row[otherKey] || '').trim();
               }
 
-              // Match Leader
+              // Resolve Hierarchy & Leader:
+              let reportingType = 'TSE';
               let reportsToId = '';
               let reportsToName = '';
-              let reportsToRole = reportingType === 'FLS' ? 'SALES_MANAGER' : 'TSE';
+              let reportsToRole = 'TSE';
 
+              // 1. If explicit leader in file
               if (rawLeader) {
-                const qLeader = rawLeader.toLowerCase();
-                const matchedLeader = currentTenantTeam.find(m =>
+                const qLeader = rawLeader.toLowerCase().trim();
+                const matchedLeader = teamPool.find(m =>
                   m.name.toLowerCase().includes(qLeader) ||
                   m.code.toLowerCase().includes(qLeader) ||
                   m.id.toLowerCase() === qLeader
@@ -3084,17 +3131,51 @@
                   reportsToId = matchedLeader.id;
                   reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
                   reportsToRole = matchedLeader.role;
-                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSC';
+                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
                 }
               }
 
+              // 2. Pre-selected leader chosen in Upload Modal
               if (!reportsToId) {
-                if (reportingType === 'FLS' && defaultFls) {
-                  reportsToId = defaultFls.id;
-                  reportsToName = `${defaultFls.name} (${defaultFls.code})`;
-                } else if (defaultTse) {
-                  reportsToId = defaultTse.id;
-                  reportsToName = `${defaultTse.name} (${defaultTse.code})`;
+                if (isPreselectedDirectBM) {
+                  reportsToId = 'bm-direct';
+                  reportsToName = 'Direct to Branch Manager';
+                  reportsToRole = 'BRANCH_MANAGER';
+                  reportingType = 'BM';
+                } else if (preselectedLeader) {
+                  reportsToId = preselectedLeader.id;
+                  reportsToName = `${preselectedLeader.name} (${preselectedLeader.code})`;
+                  reportsToRole = preselectedLeader.role;
+                  reportingType = preselectedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+                }
+              }
+
+              // 3. Fallback based on reportingType or default leader
+              if (!reportsToId) {
+                const repLower = (rawReporting || '').toLowerCase();
+                if (repLower.includes('fls') || repLower.includes('sm') || repLower.includes('direct sales')) {
+                  reportingType = 'FLS';
+                  if (defaultFls) {
+                    reportsToId = defaultFls.id;
+                    reportsToName = `${defaultFls.name} (${defaultFls.code})`;
+                    reportsToRole = 'SALES_MANAGER';
+                  }
+                } else if (repLower.includes('bm') || repLower.includes('branch manager') || repLower.includes('direct bm')) {
+                  reportingType = 'BM';
+                  reportsToId = 'bm-direct';
+                  reportsToName = 'Direct to Branch Manager';
+                  reportsToRole = 'BRANCH_MANAGER';
+                } else {
+                  reportingType = (agentImportDefaultReportingType === 'FLS') ? 'FLS' : 'TSE';
+                  if (reportingType === 'FLS' && defaultFls) {
+                    reportsToId = defaultFls.id;
+                    reportsToName = `${defaultFls.name} (${defaultFls.code})`;
+                    reportsToRole = 'SALES_MANAGER';
+                  } else if (defaultTse) {
+                    reportsToId = defaultTse.id;
+                    reportsToName = `${defaultTse.name} (${defaultTse.code})`;
+                    reportsToRole = 'TSE';
+                  }
                 }
               }
 
@@ -3167,17 +3248,22 @@
           if (field === 'phone' && row.action === 'UPDATE') {
             updated.phoneChanged = Boolean(value && value !== row.oldPhone);
           }
+          const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
           if (field === 'reportingType') {
-            // Auto update leader option if switching between TSC and FLS
+            // Auto update leader option if switching between TSE, FLS and BM
             if (value === 'FLS') {
-              const smList = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
+              const smList = teamPool.filter(m => m.role === 'SALES_MANAGER');
               if (smList.length > 0) {
                 updated.reportsToId = smList[0].id;
                 updated.reportsToName = `${smList[0].name} (${smList[0].code})`;
                 updated.reportsToRole = 'SALES_MANAGER';
               }
+            } else if (value === 'BM') {
+              updated.reportsToId = 'bm-direct';
+              updated.reportsToName = 'Direct to Branch Manager';
+              updated.reportsToRole = 'BRANCH_MANAGER';
             } else {
-              const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
+              const tseList = teamPool.filter(m => m.role === 'TSE');
               if (tseList.length > 0) {
                 updated.reportsToId = tseList[0].id;
                 updated.reportsToName = `${tseList[0].name} (${tseList[0].code})`;
@@ -3186,11 +3272,18 @@
             }
           }
           if (field === 'reportsToId') {
-            const ldr = currentTenantTeam.find(m => m.id === value);
-            if (ldr) {
-              updated.reportsToName = `${ldr.name} (${ldr.code})`;
-              updated.reportsToRole = ldr.role;
-              updated.reportingType = ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC';
+            if (value === 'bm-direct' || value === 'DIRECT_BM') {
+              updated.reportsToId = 'bm-direct';
+              updated.reportsToName = 'Direct to Branch Manager';
+              updated.reportsToRole = 'BRANCH_MANAGER';
+              updated.reportingType = 'BM';
+            } else {
+              const ldr = teamPool.find(m => m.id === value);
+              if (ldr) {
+                updated.reportsToName = `${ldr.name} (${ldr.code})`;
+                updated.reportsToRole = ldr.role;
+                updated.reportingType = ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+              }
             }
           }
           return updated;
@@ -3205,7 +3298,8 @@
 
       // Add a blank row manually to staging
       const handleAddStagedRowManual = () => {
-        const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
+        const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+        const tseList = teamPool.filter(m => m.role === 'TSE');
         const defaultLeader = tseList[0] || null;
         const newRow = {
           tempId: `stage-${Date.now()}-manual`,
@@ -3217,7 +3311,7 @@
           oldPhone: '',
           phoneChanged: false,
           email: '',
-          reportingType: 'TSC',
+          reportingType: 'TSE',
           reportsToId: defaultLeader ? defaultLeader.id : '',
           reportsToName: defaultLeader ? `${defaultLeader.name} (${defaultLeader.code})` : '',
           reportsToRole: 'TSE',
@@ -3231,25 +3325,44 @@
         showToast('Added new editable row to staging table.', 'info');
       };
 
-      // Download Sample Excel/CSV Template
-      const handleDownloadAgentTemplate = () => {
-        const headers = ['Agent Code', 'Full Name', 'Phone Number', 'Email', 'Reporting Type', 'Assigned Leader', 'Joined Date', 'Territory'];
+      // Download Clean Sample Excel (.xlsx) or CSV Template (Agent Code & Full Name Only)
+      const handleDownloadAgentTemplate = (format = 'xlsx') => {
         const sampleRows = [
-          ['BDA-8035', 'Sunil Narang', '+91 98450 11223', 'sunil.narang@branchagency.internal', 'TSC', 'Rohan Deshmukh (TSE-201)', '2026-10-15', 'Central Metro Hub'],
-          ['BDA-8036', 'Kavita Chawla', '+91 98110 44556', 'kavita.chawla@branchagency.internal', 'FLS', 'Vikram Malhotra (SM-101)', '2026-10-14', 'North Zone Hub'],
-          ['BDA-8012', 'Sunita Rao', '+91 98201 99887', 'sunita.rao@branchagency.internal', 'TSC', 'Rohan Deshmukh (TSE-201)', '2026-09-12', 'Central Metro Hub']
+          ['Agent Code', 'Full Name'],
+          ['1001543-01', 'Omana Mv'],
+          ['1149248-01', 'Rajoy Mathew George'],
+          ['1157482-01', 'Nivedya K N'],
+          ['1158572-01', 'Vinu Varghese'],
+          ['1158925-01', 'Pushpakaran M']
         ];
 
-        const csvContent = [headers.join(','), ...sampleRows.map(r => r.map(val => `"${val}"`).join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'BMS_Agent_Creation_and_Phone_Update_Template.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast('📥 Downloaded Agent Creation & Phone Update CSV template!', 'success');
+        if (format === 'xlsx' && window.XLSX) {
+          const wb = window.XLSX.utils.book_new();
+          const ws = window.XLSX.utils.aoa_to_sheet(sampleRows);
+          ws['!cols'] = [{ wch: 18 }, { wch: 30 }];
+          // Format Agent Code cells as string so Excel does not convert to scientific notation
+          for (let r = 1; r < sampleRows.length; r++) {
+            const cellRef = window.XLSX.utils.encode_cell({ r, c: 0 });
+            if (ws[cellRef]) {
+              ws[cellRef].t = 's';
+              ws[cellRef].z = '@';
+            }
+          }
+          window.XLSX.utils.book_append_sheet(wb, ws, 'Agents');
+          window.XLSX.writeFile(wb, 'Sample_Agent_Upload_Code_and_Name_Only.xlsx');
+          showToast('📥 Downloaded Clean Sample Excel (.xlsx) with Agent Code & Name only!', 'success');
+        } else {
+          const csvContent = sampleRows.map(r => r.map(val => `"${val}"`).join(',')).join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', 'Sample_Agent_Upload_Code_and_Name_Only.csv');
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast('📥 Downloaded Clean Sample CSV with Agent Code & Name only!', 'success');
+        };
       };
 
       // Final Confirmation: Directly add and update into the portal database
@@ -3568,7 +3681,7 @@
         setTransferRemarks('');
         const availableManagers = [
           { id: 'bm-head', name: selectedTenant ? `${selectedTenant.contactPerson} (Branch Manager)` : 'Branch Manager', role: 'BRANCH_MANAGER', roleLabel: '🏢 Direct to Branch Head' },
-          ...currentTenantTeam.filter(m => m.role === 'TSE' && m.status !== 'Deleted').map(t => ({ id: t.id, name: `${t.name} (${t.code})`, role: 'TSE', roleLabel: '🤝 TSC Leader' })),
+          ...currentTenantTeam.filter(m => m.role === 'TSE' && m.status !== 'Deleted').map(t => ({ id: t.id, name: `${t.name} (${t.code})`, role: 'TSE', roleLabel: '🤝 TSE Leader' })),
           ...currentTenantTeam.filter(m => m.role === 'SALES_MANAGER' && m.status !== 'Deleted').map(sm => ({ id: sm.id, name: `${sm.name} (${sm.code})`, role: 'SALES_MANAGER', roleLabel: '👔 FLS Manager' }))
         ].filter(m => m.id !== agent.reportsToId);
 
@@ -3652,13 +3765,13 @@
 
       // 4. DELETION HANDLER WITH ZERO-AGENT RULE VALIDATION
       const handleOpenDeleteMemberModal = (m) => {
-        // RULE 1: FLS & TSC/DL deletion is blocked if assigned agents > 0!
+        // RULE 1: FLS & TSE/DL deletion is blocked if assigned agents > 0!
         if (m.role === 'SALES_MANAGER' || m.role === 'TSE') {
           const assigned = getAssignedAgentsForManager(m);
           if (assigned.length > 0) {
             setBlockedDeleteInfo({
               title: `Deletion Blocked — ${assigned.length} Assigned Agent(s)`,
-              message: `Cannot delete ${m.name} (${m.code}). This manager currently has ${assigned.length} assigned agent(s) under their hierarchy. You must transfer all agents to another FLS, TSC/DL, or directly under the Branch Manager before this manager can be removed.`,
+              message: `Cannot delete ${m.name} (${m.code}). This manager currently has ${assigned.length} assigned agent(s) under their hierarchy. You must transfer all agents to another FLS, TSE/DL, or directly under the Branch Manager before this manager can be removed.`,
               count: assigned.length,
               managerId: m.id
             });
@@ -3671,7 +3784,7 @@
           if (subordinateCount > 0) {
             setBlockedDeleteInfo({
               title: `Deletion Blocked — ${subordinateCount} Active Personnel`,
-              message: `Cannot delete Branch Manager ${m.name}. There are currently ${subordinateCount} active personnel (FLS, TSC/DL, and Agents) assigned to this branch. Reassign or delete all subordinate personnel before deleting this Branch Manager.`,
+              message: `Cannot delete Branch Manager ${m.name}. There are currently ${subordinateCount} active personnel (FLS, TSE/DL, and Agents) assigned to this branch. Reassign or delete all subordinate personnel before deleting this Branch Manager.`,
               count: subordinateCount,
               managerId: m.id
             });
@@ -4440,7 +4553,7 @@
         const isEligibleSi = si >= 500000;
         const eligibleVol = isEligibleSi ? totalIssued : 0;
 
-        // TSC & FLS split (Section 15): Branch FLS = 60%, Digital FLS = 100%, BM = 100%
+        // TSE & FLS split (Section 15): Branch FLS = 60%, Digital FLS = 100%, BM = 100%
         const isDigital = policyForm.flsName.includes('Priya');
         const flsCreditRate = isDigital ? 1.0 : 0.6;
         const flsCredit = Math.round(eligibleVol * flsCreditRate);
@@ -5201,7 +5314,7 @@
           return;
         }
 
-        // RULE: Super Admin can delete a Branch Manager only when no active FLS, TSC/DL or agents remain assigned!
+        // RULE: Super Admin can delete a Branch Manager only when no active FLS, TSE/DL or agents remain assigned!
         if (targetUser.role === 'BRANCH_MANAGER') {
           const activeSubordinates = branchTeam.filter(t =>
             (t.tenantId === targetUser.tenantId || (selectedTenant && t.tenantId === selectedTenant.id)) &&
@@ -5211,7 +5324,7 @@
           if (activeSubordinates > 0) {
             setBlockedDeleteInfo({
               title: `Branch Manager Deletion Blocked — ${activeSubordinates} Active Personnel`,
-              message: `Cannot delete Branch Manager ${targetUser.name} (@${targetUser.userId}). There are currently ${activeSubordinates} active personnel (FLS, TSC/DL, and Agents) assigned under this branch. Reassign or delete all subordinate personnel before deleting this Branch Manager.`,
+              message: `Cannot delete Branch Manager ${targetUser.name} (@${targetUser.userId}). There are currently ${activeSubordinates} active personnel (FLS, TSE/DL, and Agents) assigned under this branch. Reassign or delete all subordinate personnel before deleting this Branch Manager.`,
               count: activeSubordinates,
               managerId: targetUser.id
             });
@@ -6117,7 +6230,7 @@
                   className={`portal-selector-btn ${viewMode === 'TENANT_WORKSPACE' && activeTab !== 'tenant_chat' ? 'active' : ''}`}
                   title={
                     currentUser?.role === 'SALES_MANAGER' ? 'FLS Manager Portal' :
-                    currentUser?.role === 'TSE' ? 'TSC / DL Portal' :
+                    currentUser?.role === 'TSE' ? 'TSE / DL Portal' :
                     currentUser?.role === 'AGENT' ? 'Advisor Portal' : 'Branch Manager Portal'
                   }
                 >
@@ -6129,7 +6242,7 @@
                   {!isSidebarCollapsed && (
                     <span className="flex-1 truncate">
                       {currentUser?.role === 'SALES_MANAGER' ? 'FLS Portal' :
-                       currentUser?.role === 'TSE' ? 'TSC / DL Portal' :
+                       currentUser?.role === 'TSE' ? 'TSE / DL Portal' :
                        currentUser?.role === 'AGENT' ? 'Advisor Portal' : 'Branch Portal'}
                     </span>
                   )}
@@ -6188,7 +6301,7 @@
                         setActiveTab('tenant_reportees');
                       }}
                       className={`sidebar-nav-btn ${activeTab === 'tenant_reportees' ? 'active' : ''}`}
-                      title="Direct Reportees (TSC/DL & FLS Segments)"
+                      title="Direct Reportees (TSE/DL & FLS Segments)"
                     >
                       <span className="text-sm mr-2">👥</span>
                       {!isSidebarCollapsed && <span className="flex-1 truncate">Direct Reportees</span>}
@@ -7380,7 +7493,7 @@
                             if (el) el.scrollIntoView({ behavior: 'smooth' });
                           }}
                           className="saas-kpi-card cursor-pointer hover:border-blue-400/50 hover:bg-slate-800/80 transition-all border border-slate-800 p-3 rounded-xl bg-slate-900"
-                          title="Click to view Top FLS and TSC/DL rankings for Last Month"
+                          title="Click to view Top FLS and TSE/DL rankings for Last Month"
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider">11. Top Manager</span>
@@ -7393,7 +7506,7 @@
                               {topManagerSept ? topManagerSept.manager.name : 'No Data'}
                             </strong>
                             <span className="text-[10px] font-mono font-bold text-indigo-400 block mt-0.5">
-                              {topManagerSept ? `₹${topManagerSept.premium.toLocaleString('en-IN')} (${topManagerSept.manager.role === 'SALES_MANAGER' ? 'FLS' : 'TSC'})` : '₹0'}
+                              {topManagerSept ? `₹${topManagerSept.premium.toLocaleString('en-IN')} (${topManagerSept.manager.role === 'SALES_MANAGER' ? 'FLS' : 'TSE'})` : '₹0'}
                             </span>
                           </div>
                         </div>
@@ -7679,7 +7792,7 @@
                                 );
                               })}
 
-                              {/* TSC Distribution Leaders */}
+                              {/* TSE Distribution Leaders */}
                               {currentTenantTeam.filter(m => m.role === 'TSE').map(tse => {
                                 const tseAgents = branchAgents.filter(ag => ag.reportsToId === tse.id);
                                 const achieved = tseAgents.filter(ag => getAgentActivationMetrics(ag, currentTenantPolicies, mbgaConfig).isMbgaAchieved).length;
@@ -7690,7 +7803,7 @@
                                     <div className="flex justify-between items-center text-xs mb-1">
                                       <div>
                                         <strong className="text-white block">{tse.name}</strong>
-                                        <span className="text-[10px] text-sky-400 font-mono">🤝 TSC Leader • {tse.code}</span>
+                                        <span className="text-[10px] text-sky-400 font-mono">🤝 TSE Leader • {tse.code}</span>
                                       </div>
                                       <span className="font-mono text-sky-300 font-bold">{achieved} / {tseAgents.length} ({pct}%)</span>
                                     </div>
@@ -7703,7 +7816,7 @@
 
                               {currentTenantTeam.filter(m => m.role === 'SALES_MANAGER' || m.role === 'TSE').length === 0 && (
                                 <div className="text-center py-4 text-slate-500 text-xs">
-                                  No FLS or TSC leaders added yet.
+                                  No FLS or TSE leaders added yet.
                                 </div>
                               )}
                             </div>
@@ -7716,7 +7829,7 @@
 
                   {/* ======================================================== */}
                   {/* D. TOP PERFORMANCE LEADERBOARD (LAST MONTH - SEPT 2026) */}
-                  {/* Rankings for Top Agents, Top FLS, Top TSC/DL Leaders */}
+                  {/* Rankings for Top Agents, Top FLS, Top TSE/DL Leaders */}
                   {/* ======================================================== */}
                   <div id="top-performance-section" className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
@@ -7750,10 +7863,10 @@
                           👔 Top FLS Managers
                         </button>
                         <button
-                          onClick={() => setTopPerfTab('TSC')}
-                          className={`px-2.5 py-1 rounded font-bold transition-colors ${topPerfTab === 'TSC' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          onClick={() => setTopPerfTab('TSE')}
+                          className={`px-2.5 py-1 rounded font-bold transition-colors ${(topPerfTab === 'TSE' || topPerfTab === 'TSC') ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}
                         >
-                          🤝 Top TSC Leaders
+                          🤝 Top TSE Leaders
                         </button>
                       </div>
                     </div>
@@ -7922,7 +8035,7 @@
                         );
                       }
 
-                      if (topPerfTab === 'TSC') {
+                      if (topPerfTab === 'TSE' || topPerfTab === 'TSC') {
                         const tseLeaders = currentTenantTeam.filter(m => m.role === 'TSE');
                         const rankedTse = tseLeaders.map(tse => {
                           const supervisedAgents = branchAgents.filter(ag => ag.reportsToId === tse.id);
@@ -7939,7 +8052,7 @@
                               <thead>
                                 <tr className="border-b border-slate-800 text-slate-400 text-[10px]">
                                   <th className="py-2 px-3 text-center">Rank</th>
-                                  <th className="py-2 px-3">TSC Leader Name & Code</th>
+                                  <th className="py-2 px-3">TSE Leader Name & Code</th>
                                   <th className="py-2 px-3">Territory</th>
                                   <th className="py-2 px-3 text-center">Active Agents</th>
                                   <th className="py-2 px-3 text-right">Sept Production</th>
@@ -8056,7 +8169,7 @@
                               <th className="py-2.5 px-3">Actual Issuance</th>
                               <th className="py-2.5 px-3">Business Credit</th>
                               <th className="py-2.5 px-3 text-center">Active Agents</th>
-                              <th className="py-2.5 px-3">TSC Production</th>
+                              <th className="py-2.5 px-3">TSE Production</th>
                               <th className="py-2.5 px-3">Contest Achievement</th>
                               <th className="py-2.5 px-3 text-center">Follow-ups</th>
                               <th className="py-2.5 px-3 text-right">Action</th>
@@ -8215,10 +8328,10 @@
                       })()}
                     </div>
 
-                    {/* Item 3 & 4: Two-col subgrid: Agent & TSC Activation + Product-wise Issuance */}
+                    {/* Item 3 & 4: Two-col subgrid: Agent & TSE Activation + Product-wise Issuance */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       
-                      {/* Agent & TSC Activation */}
+                      {/* Agent & TSE Activation */}
                       <div className="saas-card p-4">
                         {(() => {
                           const activeAgentsCount = currentTenantTeam.filter(m => m.role === 'AGENT' && currentTenantPolicies.some(p => p.agentCode === m.code || p.agentId === m.id)).length;
@@ -8230,7 +8343,7 @@
                             <>
                               <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800">
                                 <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                                  🌟 Agent & TSC Activation
+                                  🌟 Agent & TSE Activation
                                 </h4>
                                 <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full">
                                   {agCount > 0 ? `${activePct}% Active` : '0% Active'}
@@ -8255,7 +8368,7 @@
                                   <span className="text-slate-200 font-mono">{otherAgents} Advisors</span>
                                 </div>
                                 <div className="flex justify-between py-1">
-                                  <span className="text-slate-400">Distribution Leaders (TSCs):</span>
+                                  <span className="text-slate-400">Distribution Leaders (TSEs):</span>
                                   <strong className="text-sky-300 font-mono">{tseCount} Leaders Active</strong>
                                 </div>
                               </div>
@@ -8602,7 +8715,7 @@
             {/* VIEW: 👥 BRANCH TEAM & HIERARCHY MANAGEMENT */}
             {/* ====================================================== */}
             {/* ========================================================================= */}
-            {/* SECTION 2: DIRECT REPORTEES (TSC / DL & FLS DIRECT REPORTEES SEGMENTS) */}
+            {/* SECTION 2: DIRECT REPORTEES (TSE / DL & FLS DIRECT REPORTEES SEGMENTS) */}
             {/* ========================================================================= */}
             {viewMode === 'TENANT_WORKSPACE' && activeTab === 'tenant_reportees' && (() => {
               const flsList = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
@@ -8618,14 +8731,14 @@
                           Direct Reportees Management
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          Two Direct Operating Segments: TSC / DL & FLS
+                          Two Direct Operating Segments: TSE / DL & FLS
                         </span>
                       </div>
                       <h2 className="text-lg font-black text-white mt-1">
                         {selectedTenant ? selectedTenant.branchLocation : 'No Branch Selected'} — Direct Reportees Console
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        Branch Head: <strong className="text-slate-200">{selectedTenant ? selectedTenant.contactPerson : 'Not Assigned'}</strong> • Direct Leaders: <strong className="text-purple-400">{flsList.length + tseList.length} Direct Reportees</strong> ({flsList.length} FLS Managers, {tseList.length} TSC Leaders)
+                        Branch Head: <strong className="text-slate-200">{selectedTenant ? selectedTenant.contactPerson : 'Not Assigned'}</strong> • Direct Leaders: <strong className="text-purple-400">{flsList.length + tseList.length} Direct Reportees</strong> ({flsList.length} FLS Managers, {tseList.length} TSE Leaders)
                       </p>
                     </div>
 
@@ -8642,7 +8755,7 @@
                         className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white shadow-md flex items-center space-x-1"
                       >
                         <span>🤝</span>
-                        <span>+ Add TSC / DL</span>
+                        <span>+ Add TSE / DL</span>
                       </button>
                       <button
                         onClick={() => setActiveTab('tenant_dashboard')}
@@ -8657,7 +8770,7 @@
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">🤝 TSC / DL Reportees</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">🤝 TSE / DL Reportees</span>
                         <span className="text-2xl font-black text-sky-400 mt-0.5 block">{tseList.length} Leaders</span>
                         <span className="text-[10px] text-slate-400">Territory Distribution Leaders</span>
                       </div>
@@ -8684,7 +8797,7 @@
                   </div>
 
                   {/* ========================================== */}
-                  {/* SEGMENT 1: TSC / DL DIRECT REPORTEES       */}
+                  {/* SEGMENT 1: TSE / DL DIRECT REPORTEES       */}
                   {/* ========================================== */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-md">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -8692,7 +8805,7 @@
                         <div className="flex items-center space-x-2">
                           <span className="text-base">🤝</span>
                           <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                            Segment 1: TSC / DL Direct Reportees (Territory Sales Executives)
+                            Segment 1: TSE / DL Direct Reportees (Territory Sales Executives)
                           </h3>
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">
@@ -8700,7 +8813,7 @@
                         </p>
                       </div>
                       <span className="text-[11px] bg-sky-500/20 text-sky-300 font-mono font-bold px-2.5 py-1 rounded-full shrink-0">
-                        {tseList.length} Active TSC Leaders
+                        {tseList.length} Active TSE Leaders
                       </span>
                     </div>
 
@@ -8719,7 +8832,7 @@
                           {tseList.length === 0 ? (
                             <tr>
                               <td colSpan="5" className="p-6 text-center text-slate-500">
-                                No TSC / DL Leaders currently assigned to this branch.
+                                No TSE / DL Leaders currently assigned to this branch.
                               </td>
                             </tr>
                           ) : (
@@ -8745,7 +8858,7 @@
                                   </td>
                                   <td className="p-3">
                                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                                      🤝 TSC Leader
+                                      🤝 TSE Leader
                                     </span>
                                     <span className="block text-[10px] text-slate-400 mt-0.5">{tse.territory || 'Territory Hub'}</span>
                                   </td>
@@ -9238,7 +9351,7 @@
                         >
                           <option value="ALL">All Managers & Leaders</option>
                           <option value="bm-head">👔 Direct to Branch Manager</option>
-                          <optgroup label="TSC / Distribution Leaders">
+                          <optgroup label="TSE / Distribution Leaders">
                             {currentTenantTeam.filter(m => m.role === 'TSE').map(t => (
                               <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
                             ))}
@@ -9315,7 +9428,7 @@
                                         ag.reportsToRole === 'BRANCH_MANAGER' || ag.reportsToId === 'bm-head' ? 'bg-amber-500/20 text-amber-300 font-bold' :
                                         'bg-indigo-500/20 text-indigo-300'
                                       }`}>
-                                        {ag.reportsToRole === 'TSE' ? '🤝 TSC Leader' :
+                                        {ag.reportsToRole === 'TSE' ? '🤝 TSE Leader' :
                                          ag.reportsToRole === 'BRANCH_MANAGER' || ag.reportsToId === 'bm-head' ? '👔 Direct to BM' :
                                          '👔 FLS Manager'}
                                       </span>
@@ -9474,7 +9587,7 @@
                       {selectedTenant.branchLocation} — Visual Hierarchy Tree
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Level 1: Branch Manager → Level 2: FLS Managers → Level 3: TSC Leaders → Level 4: Insurance Advisors
+                      Level 1: Branch Manager → Level 2: FLS Managers → Level 3: TSE Leaders → Level 4: Insurance Advisors
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -10940,12 +11053,12 @@
 
             {/* Note: tenant_contests is unified into Centralized Master Management View */}
 
-            {/* VIEW: 💰 TSC INCENTIVES */}
+            {/* VIEW: 💰 TSE INCENTIVES */}
             {viewMode === 'TENANT_WORKSPACE' && activeTab === 'tenant_tsc_incentives' && (
               <div className="space-y-4 animate-fadeIn">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-bold text-white">💰 TSC Incentives & Distribution Production</h2>
+                    <h2 className="text-base font-bold text-white">💰 TSE Incentives & Distribution Production</h2>
                     <p className="text-xs text-slate-400 mt-0.5">Territory Sales Executive quarterly incentive matrix and milestone qualification</p>
                   </div>
                   <button onClick={() => setActiveTab('tenant_dashboard')} className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-lg">← Back</button>
@@ -10954,7 +11067,7 @@
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="p-3">TSC Leader</th>
+                        <th className="p-3">TSE Leader</th>
                         <th className="p-3">Territory</th>
                         <th className="p-3">Reporting FLS</th>
                         <th className="p-3">Attributed Production</th>
@@ -11515,7 +11628,7 @@
                                       {ag.reportsToName || 'Branch Manager'}
                                     </span>
                                     <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${ag.reportsToRole === 'SALES_MANAGER' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-sky-500/20 text-sky-300'}`}>
-                                      {ag.reportsToRole === 'SALES_MANAGER' ? '👔 FLS Manager' : '🤝 TSC Leader'}
+                                      {ag.reportsToRole === 'SALES_MANAGER' ? '👔 FLS Manager' : '🤝 TSE Leader'}
                                     </span>
                                   </div>
                                 </td>
@@ -11634,13 +11747,13 @@
                 ? '🏢 Branch Manager Renewal Portfolio'
                 : isFLS
                 ? `👔 Front Line Sales (FLS) Renewal Portfolio — ${currentUser?.name}`
-                : `🤝 Territory Sales Executive (TSC/DL) Renewal Portfolio — ${currentUser?.name}`;
+                : `🤝 Territory Sales Executive (TSE/DL) Renewal Portfolio — ${currentUser?.name}`;
 
               const portalSubtitle = isBM
-                ? `Branch: ${selectedTenant.branchLocation} (${selectedTenant.companyName}) • Branch-Wide Oversight (All FLS, TSC & Advisors)`
+                ? `Branch: ${selectedTenant.branchLocation} (${selectedTenant.companyName}) • Branch-Wide Oversight (All FLS, TSE & Advisors)`
                 : isFLS
                 ? `Sales Manager: ${currentUser?.name} (${currentUser?.employeeId || 'SM'}) • Supervised TSEs & Direct Advisors in ${selectedTenant.branchLocation}`
-                : `TSC Leader: ${currentUser?.name} (${currentUser?.employeeId || 'TSE'}) • Territory: ${currentUser?.territory || 'Assigned Territory'} • Supervised Field Advisors`;
+                : `TSE Leader: ${currentUser?.name} (${currentUser?.employeeId || 'TSE'}) • Territory: ${currentUser?.territory || 'Assigned Territory'} • Supervised Field Advisors`;
 
               // Extract unique FLS, TSE, and Agents for filter dropdowns from current tenant team
               const flsOptions = currentTenantTeam.filter(m => m.role === 'SALES_MANAGER');
@@ -11665,7 +11778,7 @@
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                          {isBM ? 'Branch Manager Centralized Console' : isFLS ? 'FLS Agency Supervision' : 'TSC Territory Supervision'}
+                          {isBM ? 'Branch Manager Centralized Console' : isFLS ? 'FLS Agency Supervision' : 'TSE Territory Supervision'}
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">
                           Hierarchy Attributed • Centralized DB
@@ -11839,16 +11952,16 @@
                         </div>
                       )}
 
-                      {/* 2. TSC / DL Leader Filter (For BM and FLS) */}
+                      {/* 2. TSE / DL Leader Filter (For BM and FLS) */}
                       {(isBM || isFLS) && (
                         <div>
-                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">TSC / DL Leader</label>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">TSE / DL Leader</label>
                           <select
                             value={renewalTseFilter}
                             onChange={(e) => setRenewalTseFilter(e.target.value)}
                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-medium text-xs focus:outline-none focus:border-sky-500"
                           >
-                            <option value="ALL">All TSC Leaders</option>
+                            <option value="ALL">All TSE Leaders</option>
                             {tseOptions.map(tse => (
                               <option key={tse.id} value={tse.code}>🤝 {tse.name} ({tse.code})</option>
                             ))}
@@ -12296,7 +12409,7 @@
                     const tsePols = filteredPolicies.filter(p => p.tseName === tse.name);
                     const totalVol = tsePols.reduce((s, p) => s + (Number(p.eligibleVolume ?? p.premiumAmount) || 0), 0);
                     return {
-                      TSCLeader: tse.name,
+                      TSELeader: tse.name,
                       Code: tse.code,
                       ReportingManager: tse.reportsToName,
                       Territory: tse.territory,
@@ -12336,7 +12449,7 @@
               const subReportsList = [
                 { id: 'BRANCH_BUSINESS', icon: '🏢', label: '1. Branch Business' },
                 { id: 'FLS_PERFORMANCE', icon: '💼', label: '2. FLS Performance' },
-                { id: 'TSC_PRODUCTION', icon: '🌟', label: '3. TSC Production' },
+                { id: 'TSC_PRODUCTION', icon: '🌟', label: '3. TSE Production' },
                 { id: 'AGENT_PRODUCTION', icon: '👤', label: '4. Agent Production' },
                 { id: 'PRODUCT_WISE', icon: '📦', label: '5. Product-wise' },
                 { id: 'PORTABILITY', icon: '🔄', label: '6. Portability' },
@@ -12648,12 +12761,12 @@
                         </table>
                       )}
 
-                      {/* REPORT 3: TSC PRODUCTION */}
+                      {/* REPORT 3: TSE PRODUCTION */}
                       {currentSubReport === 'TSC_PRODUCTION' && (
                         <table className="w-full text-left text-xs">
                           <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
                             <tr>
-                              <th className="p-3">TSC Leader</th>
+                              <th className="p-3">TSE Leader</th>
                               <th className="p-3">Reporting Line</th>
                               <th className="p-3">Territory</th>
                               <th className="p-3">Vertical</th>
@@ -13219,7 +13332,7 @@
                       </span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Centrally create, authorize, activate, deactivate, and reset login credentials for Branch Managers, FLS, TSCs, and Agents.
+                      Centrally create, authorize, activate, deactivate, and reset login credentials for Branch Managers, FLS, TSEs, and Agents.
                     </p>
                   </div>
 
@@ -13279,7 +13392,7 @@
                     <span className="text-[10px] text-blue-300">Direct Sales Leaders</span>
                   </div>
                   <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-                    <span className="text-[10px] uppercase font-bold text-sky-400 block">TSC Leaders</span>
+                    <span className="text-[10px] uppercase font-bold text-sky-400 block">TSE Leaders</span>
                     <strong className="text-xl font-black text-white block mt-0.5">{users.filter(u => u.role === 'TSE').length}</strong>
                     <span className="text-[10px] text-sky-300">Territory Distribution</span>
                   </div>
@@ -13310,7 +13423,7 @@
                     <option value="SUPER_ADMIN">👑 Super Admin</option>
                     <option value="BRANCH_MANAGER">🏢 Branch Manager</option>
                     <option value="SALES_MANAGER">👔 Direct Sales Manager (FLS)</option>
-                    <option value="TSE">🤝 Territory Sales Executive (TSC)</option>
+                    <option value="TSE">🤝 Territory Sales Executive (TSE)</option>
                     <option value="AGENT">🌟 Insurance Advisor (Agent)</option>
                   </select>
                   <select
@@ -13543,17 +13656,17 @@
             )}
 
             {/* ====================================================== */}
-            {/* VIEW: 🤝 TSE / TSC DISTRIBUTION LEADER PORTAL */}
+            {/* VIEW: 🤝 TSE DISTRIBUTION LEADER PORTAL */}
             {/* ====================================================== */}
             {viewMode === 'TENANT_WORKSPACE' && activeTab === 'tse_dashboard' && (
               <div className="space-y-4 animate-fadeIn">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg">
                   <div>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                      Territory Sales Executive (TSC) Workspace
+                      Territory Sales Executive (TSE) Workspace
                     </span>
                     <h2 className="text-lg font-black text-white mt-1">
-                      TSC Leader: {currentUser?.name} ({currentUser?.territory || 'Assigned Territory'})
+                      TSE Leader: {currentUser?.name} ({currentUser?.territory || 'Assigned Territory'})
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
                       Advisor activation tracking, territory production, and quarterly incentive qualification.
@@ -14201,7 +14314,7 @@
                         </button>
                       </div>
 
-                      {/* 1. REPORTING TYPE (Two Options: TSC/DL vs FLS) */}
+                      {/* 1. REPORTING TYPE (Two Options: TSE/DL vs FLS) */}
                       <div>
                         <label className="block text-slate-300 font-bold text-xs mb-1.5 uppercase tracking-wider">
                           1. Reporting Type *
@@ -14213,20 +14326,20 @@
                               const tseList = currentTenantTeam.filter(m => m.role === 'TSE');
                               setMemberForm({
                                 ...memberForm,
-                                reportingType: 'TSC',
+                                reportingType: 'TSE',
                                 reportsToId: tseList[0] ? tseList[0].id : '',
                                 reportsToName: tseList[0] ? `${tseList[0].name} (${tseList[0].code})` : ''
                               });
                             }}
                             className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-2.5 ${
-                              memberForm.reportingType === 'TSC'
+                              (memberForm.reportingType === 'TSE' || memberForm.reportingType === 'TSC')
                                 ? 'bg-sky-950/60 border-sky-500 text-white shadow-md ring-1 ring-sky-500/50'
                                 : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                             }`}
                           >
                             <span className="text-lg">🤝</span>
                             <div>
-                              <span className="font-bold text-xs block text-white">TSC / DL</span>
+                              <span className="font-bold text-xs block text-white">TSE / DL</span>
                               <span className="text-[10px] text-sky-400 block mt-0.5">Direct Reportee to Branch Manager</span>
                             </div>
                           </button>
@@ -14260,7 +14373,7 @@
                       {/* 2. REPORTS TO (Dropdown containing only corresponding managers for this branch) */}
                       <div>
                         <label className="block text-slate-300 font-bold text-xs mb-1 uppercase tracking-wider">
-                          2. Reports To ({memberForm.reportingType === 'TSC' ? 'Assigned TSC / DL' : 'Assigned FLS Manager'}) *
+                          2. Reports To ({(memberForm.reportingType === 'TSE' || memberForm.reportingType === 'TSC') ? 'Assigned TSE / DL' : 'Assigned FLS Manager'}) *
                         </label>
                         <select
                           required
@@ -14275,9 +14388,9 @@
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-semibold text-xs focus:outline-none focus:border-amber-500"
                         >
-                          {memberForm.reportingType === 'TSC' ? (
+                          {(memberForm.reportingType === 'TSE' || memberForm.reportingType === 'TSC') ? (
                             currentTenantTeam.filter(m => m.role === 'TSE').length === 0 ? (
-                              <option value="">No TSC / DL leaders assigned to this branch</option>
+                              <option value="">No TSE / DL leaders assigned to this branch</option>
                             ) : (
                               currentTenantTeam.filter(m => m.role === 'TSE').map(tse => (
                                 <option key={tse.id} value={tse.id}>
@@ -14298,7 +14411,7 @@
                           )}
                         </select>
                         <span className="text-[10px] text-slate-500 block mt-1">
-                          {memberForm.reportingType === 'TSC'
+                          {(memberForm.reportingType === 'TSE' || memberForm.reportingType === 'TSC')
                             ? 'Advisor will report directly to this Territory Sales Executive / Distribution Leader.'
                             : 'Advisor will report directly to this Front Line Sales Manager.'}
                         </span>
@@ -14669,40 +14782,46 @@
 
                 <div className="space-y-4">
                   {/* Reporting Hierarchy Defaults */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-slate-300 font-semibold text-xs mb-1">
-                        Default Hierarchy Segment
+                  <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-emerald-400 font-bold text-xs">
+                        🎯 Target Hierarchy / Assigned Leader (Auto-assigns to uploaded list):
                       </label>
-                      <select
-                        value={agentImportDefaultReportingType}
-                        onChange={(e) => setAgentImportDefaultReportingType(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
-                      >
-                        <option value="TSC">🤝 Territory Sales Executive (TSE / TSC)</option>
-                        <option value="FLS">👔 Direct Sales Manager (FLS)</option>
-                      </select>
+                      <span className="text-[10px] text-slate-400 font-mono">Optional • Can change in bulk on review</span>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-300 font-semibold text-xs mb-1">
-                        Default Superior Leader
-                      </label>
-                      <select
-                        value={agentImportDefaultLeaderId}
-                        onChange={(e) => setAgentImportDefaultLeaderId(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
-                      >
-                        <option value="">Auto-Detect from File</option>
+                    <select
+                      value={agentImportDefaultLeaderId}
+                      onChange={(e) => setAgentImportDefaultLeaderId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl p-2.5 text-xs text-white font-semibold"
+                    >
+                      <option value="">-- Choose Leader for this Upload (or select in staging) --</option>
+                      <optgroup label="🤝 Territory Sales Executives (TSE / DL)">
                         {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                          .filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER')
+                          .filter(m => m.role === 'TSE')
                           .map(ldr => (
                             <option key={ldr.id} value={ldr.id}>
-                              {ldr.name} ({ldr.code}) — {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC'}
+                              {ldr.name} ({ldr.code}) — TSE Leader
                             </option>
                           ))}
-                      </select>
-                    </div>
+                      </optgroup>
+                      <optgroup label="👔 Direct Sales Managers (FLS)">
+                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                          .filter(m => m.role === 'SALES_MANAGER')
+                          .map(ldr => (
+                            <option key={ldr.id} value={ldr.id}>
+                              {ldr.name} ({ldr.code}) — FLS Manager
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="🏢 Branch Manager">
+                        <option value="DIRECT_BM">🏢 Direct to Branch Manager</option>
+                      </optgroup>
+                    </select>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      💡 Since your Excel only contains <strong>Agent Code</strong> and <strong>Full Name</strong>, selecting a leader above will assign all uploaded agents to that leader automatically.
+                    </p>
                   </div>
 
                   {/* File Upload Zone */}
@@ -14722,7 +14841,7 @@
                         Click to select Excel (.xlsx, .xls) or CSV
                       </div>
                       <p className="text-xs text-slate-400">
-                        Supports columns: Agent Code, Full Name, Phone Number, Email, Reporting Type, Assigned Leader, Coding Date
+                        Only 2 columns required: <strong>Agent Code</strong> and <strong>Full Name</strong> (Phone & Email optional)
                       </p>
                     </label>
                   </div>
@@ -14739,15 +14858,27 @@
                   </div>
 
                   {/* Download Template & Cancel Buttons */}
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={handleDownloadAgentTemplate}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center space-x-1.5 transition-colors"
-                    >
-                      <span>⬇️</span>
-                      <span>Download Sample CSV Template</span>
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAgentTemplate('xlsx')}
+                        className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-colors shadow-sm"
+                        title="Download clean sample Excel with Agent Code and Name only"
+                      >
+                        <span>⬇️</span>
+                        <span>Download Sample Excel (.xlsx)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAgentTemplate('csv')}
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center space-x-1.5 transition-colors"
+                        title="Download clean sample CSV"
+                      >
+                        <span>📄</span>
+                        <span>Sample CSV</span>
+                      </button>
+                    </div>
 
                     <button
                       type="button"
@@ -14857,6 +14988,56 @@
                   </div>
                 </div>
 
+                {/* 2.5. Bulk Hierarchy Assignment Bar */}
+                <div className="p-3 bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 border-b border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-amber-300 flex items-center space-x-1.5">
+                      <span>⚡</span>
+                      <span>Bulk Hierarchy Assignment:</span>
+                    </span>
+                    <select
+                      value={bulkLeaderId}
+                      onChange={(e) => setBulkLeaderId(e.target.value)}
+                      className="bg-slate-900 border border-indigo-500/50 rounded-xl px-3 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-indigo-400"
+                    >
+                      <option value="">-- Select TSE, DL or FLS to Apply to All --</option>
+                      <optgroup label="🤝 TSE / DL Leaders">
+                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                          .filter(m => m.role === 'TSE')
+                          .map(ldr => (
+                            <option key={ldr.id} value={ldr.id}>
+                              {ldr.name} ({ldr.code}) — TSE Leader
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="👔 Direct Sales Managers (FLS)">
+                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                          .filter(m => m.role === 'SALES_MANAGER')
+                          .map(ldr => (
+                            <option key={ldr.id} value={ldr.id}>
+                              {ldr.name} ({ldr.code}) — FLS Manager
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="🏢 Branch Manager">
+                        <option value="DIRECT_BM">🏢 Direct to Branch Manager</option>
+                      </optgroup>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleApplyBulkLeader}
+                      disabled={!bulkLeaderId}
+                      className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                    >
+                      <span>✓</span>
+                      <span>Apply to All ({agentImportStagingRows.length}) Rows</span>
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    💡 Easily reassign the whole batch, or adjust individual leaders in the table below.
+                  </div>
+                </div>
+
                 {/* 3. Interactive Staging Table with Inline Inputs */}
                 <div className="flex-1 overflow-y-auto overflow-x-auto p-2">
                   <table className="w-full text-xs text-left">
@@ -14962,10 +15143,11 @@
                                 <select
                                   value={row.reportingType}
                                   onChange={(e) => handleUpdateStagedRow(row.tempId, 'reportingType', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500 font-semibold"
                                 >
-                                  <option value="TSC">🤝 TSC Leader</option>
+                                  <option value="TSE">🤝 TSE Leader</option>
                                   <option value="FLS">👔 Direct Sales (FLS)</option>
+                                  <option value="BM">🏢 Branch Manager</option>
                                 </select>
                               </td>
 
@@ -14974,16 +15156,30 @@
                                 <select
                                   value={row.reportsToId}
                                   onChange={(e) => handleUpdateStagedRow(row.tempId, 'reportsToId', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500"
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500 font-semibold"
                                 >
                                   <option value="">Select Superior Leader...</option>
-                                  {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                                    .filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER')
-                                    .map(ldr => (
-                                      <option key={ldr.id} value={ldr.id}>
-                                        {ldr.name} ({ldr.code}) — {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSC'}
-                                      </option>
-                                    ))}
+                                  <optgroup label="🤝 TSE / DL Leaders">
+                                    {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                                      .filter(m => m.role === 'TSE')
+                                      .map(ldr => (
+                                        <option key={ldr.id} value={ldr.id}>
+                                          {ldr.name} ({ldr.code}) — TSE
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                  <optgroup label="👔 FLS Sales Managers">
+                                    {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                                      .filter(m => m.role === 'SALES_MANAGER')
+                                      .map(ldr => (
+                                        <option key={ldr.id} value={ldr.id}>
+                                          {ldr.name} ({ldr.code}) — FLS
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                  <optgroup label="🏢 Branch Manager">
+                                    <option value="bm-direct">🏢 Direct to Branch Manager</option>
+                                  </optgroup>
                                 </select>
                               </td>
 
@@ -16504,7 +16700,7 @@
                     <div>
                       <h3 className="font-black text-white text-base">Edit Personnel Details</h3>
                       <p className="text-[11px] text-slate-400">
-                        {memberToEdit.role === 'SALES_MANAGER' ? '👔 FLS Sales Manager' : memberToEdit.role === 'TSE' ? '🤝 TSC Distribution Leader' : '🌟 Insurance Advisor'} • {memberToEdit.code}
+                        {memberToEdit.role === 'SALES_MANAGER' ? '👔 FLS Sales Manager' : memberToEdit.role === 'TSE' ? '🤝 TSE Distribution Leader' : '🌟 Insurance Advisor'} • {memberToEdit.code}
                       </p>
                     </div>
                   </div>
@@ -16684,7 +16880,7 @@
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
                     >
                       <option value="bm-head">🏢 {selectedTenant ? selectedTenant.contactPerson : 'Branch Head'} (Branch Manager - Direct)</option>
-                      <optgroup label="🤝 TSC / Distribution Leaders">
+                      <optgroup label="🤝 TSE / Distribution Leaders">
                         {currentTenantTeam.filter(m => m.role === 'TSE' && m.status !== 'Deleted' && m.id !== agentToTransfer.reportsToId).map(t => (
                           <option key={t.id} value={t.id}>
                             {t.name} ({t.code}) — {t.territory || 'Territory Hub'}
@@ -16874,7 +17070,7 @@
                   <div className="p-3 bg-rose-950/40 border border-rose-800/40 rounded-xl text-[11px] text-rose-200 space-y-1">
                     <span className="font-bold block">⚠️ Deletion Rule:</span>
                     <span>
-                      A manager can only be deleted when they have zero assigned agents. Transfer all agents to another FLS, TSC/DL, or directly under the Branch Manager before proceeding.
+                      A manager can only be deleted when they have zero assigned agents. Transfer all agents to another FLS, TSE/DL, or directly under the Branch Manager before proceeding.
                     </span>
                   </div>
                 </div>
@@ -17169,7 +17365,7 @@
                       >
                         <option value="BRANCH_MANAGER">🏢 Branch Manager</option>
                         <option value="SALES_MANAGER">👔 Direct Sales Manager (FLS)</option>
-                        <option value="TSE">🤝 Territory Sales Executive (TSC)</option>
+                        <option value="TSE">🤝 Territory Sales Executive (TSE)</option>
                         <option value="AGENT">🌟 Insurance Advisor (Agent)</option>
                         <option value="SUPER_ADMIN">👑 Commercial Super Admin</option>
                       </select>
@@ -19625,7 +19821,7 @@
                       >
                         <option value="Business Leads">Business Leads</option>
                         <option value="Agent Recruitment Leads">Agent Recruitment Leads</option>
-                        <option value="TSC / DL Recruitment Leads">TSC / DL Recruitment Leads</option>
+                        <option value="TSE / DL Recruitment Leads">TSE / DL Recruitment Leads</option>
                       </select>
                     </div>
                   </div>
@@ -19640,7 +19836,7 @@
                         <option value="FLS Self-Generated">FLS Self-Generated</option>
                         <option value="Branch Manager Referral">Branch Manager Referral</option>
                         <option value="Agent Sourced">Agent Sourced</option>
-                        <option value="TSC Referral">TSC Referral</option>
+                        <option value="TSE Referral">TSE Referral</option>
                         <option value="Direct Digital Outreach">Direct Digital Outreach</option>
                       </select>
                     </div>
