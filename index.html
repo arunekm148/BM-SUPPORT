@@ -178,6 +178,31 @@
         localStorage.removeItem('bms_promo_credit_campaigns_v1');
         localStorage.setItem('bms_clean_products_v11', 'true');
       }
+
+      // Cache Migration v12: Auto-purge nameless bogus "Advisor Name" / "New Advisor" agents and deduplicate branch roster
+      if (!localStorage.getItem('bms_clean_nameless_agents_v12')) {
+        const rawTeam = localStorage.getItem('bms_branch_team_v3');
+        if (rawTeam) {
+          try {
+            const team = JSON.parse(rawTeam);
+            const seenCodes = new Set();
+            const seenNames = new Set();
+            const cleanTeam = (team || []).filter(m => {
+              const name = (m.name || '').trim();
+              const code = (m.code || '').trim().toUpperCase();
+              if (!name || name.toLowerCase() === 'advisor name' || name.toLowerCase() === 'new advisor') return false;
+              if (code && code.startsWith('BDA-259')) return false;
+              if (code && seenCodes.has(code)) return false;
+              if (name && seenNames.has(name.toLowerCase())) return false;
+              if (code) seenCodes.add(code);
+              if (name) seenNames.add(name.toLowerCase());
+              return true;
+            });
+            localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleanTeam));
+          } catch(err) {}
+        }
+        localStorage.setItem('bms_clean_nameless_agents_v12', 'true');
+      }
     } catch (e) {}
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -2196,12 +2221,21 @@
             'Harish Kulkarni', 'Pallavi Sen', 'Karan Bajaj', 'Ritu Mehrotra',
             'Tarun Bhatia', 'Simran Kaur'
           ];
+          const seenCodes = new Set();
+          const seenNames = new Set();
           const cleaned = (list || []).filter(m => {
             if (demoMemberIds.includes(m.id)) return false;
             if (demoNames.includes(m.name)) return false;
             if (m.tenantId === 'tnt-101' || m.tenantId === 'tnt-102' || m.tenantId === 'tnt-103') return false;
             if (m.id && m.id.startsWith('tm-bda-')) return false;
-            if (m.code && m.code.toUpperCase().startsWith('BDA-80')) return false;
+            if (m.code && (m.code.toUpperCase().startsWith('BDA-80') || m.code.toUpperCase().startsWith('BDA-259'))) return false;
+            const mName = (m.name || '').trim();
+            const mCode = (m.code || '').trim().toUpperCase();
+            if (!mName || mName.toLowerCase() === 'advisor name' || mName.toLowerCase() === 'new advisor') return false;
+            if (mCode && seenCodes.has(mCode)) return false;
+            if (mName && seenNames.has(mName.toLowerCase())) return false;
+            if (mCode) seenCodes.add(mCode);
+            if (mName) seenNames.add(mName.toLowerCase());
             return true;
           });
           try { localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleaned)); } catch(e) {}
@@ -3042,6 +3076,67 @@
         return '';
       };
 
+      // ========================================================
+      // AGENT DUPLICATE CHECKER & LIVE VALIDATION UTILITY
+      // Auto-checks for duplicate Agent Codes and Agent Names across staged rows
+      // ========================================================
+      const checkAndTagDuplicates = (rows, currentTeam) => {
+        const teamPool = currentTeam && currentTeam.length > 0 ? currentTeam : [];
+        const seenCodes = new Map();
+        const seenNames = new Map();
+
+        return rows.map((row) => {
+          const rawCode = (row.code || '').trim().toUpperCase();
+          const rawName = (row.name || '').trim();
+          const lowerName = rawName.toLowerCase();
+          let isDup = false;
+          let dupReason = '';
+
+          // 1. Duplicate Code Check within file/batch
+          if (rawCode) {
+            if (seenCodes.has(rawCode)) {
+              isDup = true;
+              dupReason = `Duplicate Agent Code '${rawCode}' in list`;
+            } else {
+              seenCodes.set(rawCode, row.tempId);
+            }
+          }
+
+          // 2. Duplicate Name Check within file/batch
+          if (rawName && !['advisor name', 'new advisor'].includes(lowerName)) {
+            if (seenNames.has(lowerName)) {
+              isDup = true;
+              dupReason = dupReason ? `${dupReason} & Duplicate Name '${rawName}'` : `Duplicate Name '${rawName}' in list`;
+            } else {
+              seenNames.set(lowerName, row.tempId);
+            }
+          }
+
+          // 3. Match against existing portal branch roster
+          const existingAgent = teamPool.find(m => {
+            const mCode = (m.code || '').trim().toUpperCase();
+            const mName = (m.name || '').trim().toLowerCase();
+            return (rawCode && mCode === rawCode) || (lowerName && mName === lowerName);
+          });
+
+          let action = row.action;
+          if (isDup) {
+            action = 'DUPLICATE';
+          } else if (existingAgent) {
+            action = 'UPDATE';
+          } else {
+            action = 'NEW';
+          }
+
+          return {
+            ...row,
+            action,
+            duplicateReason: isDup ? dupReason : '',
+            existingAgentId: existingAgent ? existingAgent.id : (action === 'NEW' ? null : row.existingAgentId)
+          };
+        });
+      };
+
       // Bulk Apply Selected Leader to All Staged Rows in Review Screen
       const handleApplyBulkLeader = () => {
         if (!bulkLeaderId) {
@@ -3137,10 +3232,36 @@
                 const otherKey = rowKeys.find(k => k !== rowKeys[1]);
                 if (otherKey) rawCode = String(row[otherKey] || '').trim();
               }
-              // If we have rawCode and rawName and 3rd column exists but rawLeader wasn't found by alias
               if (!rawLeader && rowKeys.length >= 3) {
                 const thirdKey = rowKeys.find((k, idx) => idx === 2 || /tse|leader|manager|report/i.test(k));
                 if (thirdKey) rawLeader = String(row[thirdKey] || '').trim();
+              }
+
+              // MATCH AGAINST EXISTING AGENTS IN PORTAL
+              const cleanCode = (rawCode || '').trim().toUpperCase();
+              const cleanPhone = (rawPhone || '').trim().replace(/[^0-9+]/g, '');
+              const cleanName = (rawName || '').trim();
+              const lowerName = cleanName.toLowerCase();
+              const isPlaceholderName = !cleanName ||
+                ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(lowerName);
+
+              // Match by code, name, phone, or email
+              const existingAgent = (branchTeam || []).find(m => {
+                const mCode = (m.code || '').trim().toUpperCase();
+                const mName = (m.name || '').trim().toLowerCase();
+                const mPhone = (m.phone || '').trim().replace(/[^0-9+]/g, '');
+                const mEmail = (m.email || '').trim().toLowerCase();
+                return (cleanCode && mCode === cleanCode) ||
+                       (!isPlaceholderName && lowerName && mName === lowerName) ||
+                       (cleanPhone && cleanPhone.length >= 10 && mPhone && mPhone.slice(-10) === cleanPhone.slice(-10)) ||
+                       (rawEmail && mEmail && mEmail === rawEmail.trim().toLowerCase());
+              });
+
+              // RESOLVE REAL NAME: if nameless and not in existingAgent, SKIP ROW COMPLETELY
+              const finalName = cleanName || (existingAgent ? existingAgent.name : '');
+              if (!finalName || ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(finalName.toLowerCase())) {
+                // Skip empty or nameless row completely
+                return null;
               }
 
               // Resolve Hierarchy & Leader:
@@ -3166,7 +3287,6 @@
 
               if (!reportsToId && rawLeader) {
                 const qLeader = rawLeader.toLowerCase().trim();
-                // 1. Bidirectional full match (handles "CHINJU JOSEPH (1789423-01)" or "CHINJU JOSEPH")
                 let matchedLeader = teamPool.find(m => {
                   const mName = (m.name || '').toLowerCase().trim();
                   const mCode = (m.code || '').toLowerCase().trim();
@@ -3178,7 +3298,6 @@
                     (mId && (mId === qLeader || qLeader.includes(mId)))
                   );
                 });
-                // 2. Token match if multi-word (e.g. "CHINJU" or "JOSEPH")
                 if (!matchedLeader) {
                   const tokens = qLeader.split(/[\s\-()/,]+/).filter(t => t.length >= 3);
                   if (tokens.length > 0) {
@@ -3195,7 +3314,6 @@
                   reportsToRole = matchedLeader.role;
                   reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
                 } else {
-                  // Leader specified in file but not yet in teamPool: default to TSE role and preserve leader name
                   reportingType = 'TSE';
                   reportsToRole = 'TSE';
                   reportsToName = rawLeader;
@@ -3250,20 +3368,6 @@
                 }
               }
 
-              // MATCH AGAINST EXISTING AGENTS IN PORTAL
-              // Search by Code or Phone or Email
-              const cleanCode = rawCode.trim().toUpperCase();
-              const cleanPhone = rawPhone.trim().replace(/[^0-9+]/g, '');
-
-              const existingAgent = (branchTeam || []).find(m => {
-                const mCode = (m.code || '').trim().toUpperCase();
-                const mPhone = (m.phone || '').trim().replace(/[^0-9+]/g, '');
-                const mEmail = (m.email || '').trim().toLowerCase();
-                return (cleanCode && mCode === cleanCode) ||
-                       (cleanPhone && cleanPhone.length >= 10 && mPhone && mPhone.slice(-10) === cleanPhone.slice(-10)) ||
-                       (rawEmail && mEmail && mEmail === rawEmail.trim().toLowerCase());
-              });
-
               const isUpdate = Boolean(existingAgent);
               const oldPhone = existingAgent ? (existingAgent.phone || '') : '';
               const finalPhone = rawPhone.trim() || oldPhone || '+91 98000 00000';
@@ -3272,9 +3376,10 @@
               return {
                 tempId,
                 action: isUpdate ? 'UPDATE' : 'NEW',
+                duplicateReason: '',
                 existingAgentId: existingAgent ? existingAgent.id : null,
-                code: rawCode.trim() || (existingAgent ? existingAgent.code : `BDA-${Date.now().toString().slice(-4)}`),
-                name: rawName.trim() || (existingAgent ? existingAgent.name : 'Advisor Name'),
+                code: cleanCode || (existingAgent ? existingAgent.code : `BDA-${Math.floor(1000 + Math.random() * 9000)}`),
+                name: finalName,
                 phone: finalPhone,
                 oldPhone,
                 phoneChanged,
@@ -3287,14 +3392,28 @@
                 territory: rawTerritory.trim() || (existingAgent ? existingAgent.territory : 'Central Metro Hub'),
                 vertical: existingAgent ? existingAgent.vertical : 'Branch Agency Vertical',
                 clubTier: existingAgent ? existingAgent.clubTier : 'Associate (15%)',
-                isValid: Boolean(rawCode.trim() || rawName.trim() || existingAgent)
+                isValid: true
               };
-            });
+            }).filter(Boolean);
 
-            setAgentImportStagingRows(staged);
+            if (staged.length === 0) {
+              showToast('⚠️ No valid agents found in uploaded file. Please ensure rows have valid Agent Names.', 'warning');
+              return;
+            }
+
+            // Auto-detect and tag duplicate agent codes and duplicate agent names
+            const taggedStaged = checkAndTagDuplicates(staged, branchTeam);
+            const dupCount = taggedStaged.filter(r => r.action === 'DUPLICATE').length;
+
+            setAgentImportStagingRows(taggedStaged);
             setShowAgentExcelImportModal(false);
             setShowAgentImportStagingModal(true);
-            showToast(`📂 Successfully loaded ${staged.length} records from "${file.name}" into the Staging Review list. You can edit any field before confirming!`, 'success');
+
+            if (dupCount > 0) {
+              showToast(`📂 Staged ${taggedStaged.length} records. ⚠️ Auto-detected ${dupCount} duplicate records! You can remove or edit them before confirming.`, 'warning');
+            } else {
+              showToast(`📂 Successfully loaded ${taggedStaged.length} clean records from "${file.name}" into Staging Review!`, 'success');
+            }
           } catch (err) {
             console.error('Error parsing agent file:', err);
             showToast(`❌ Error reading file: ${err.message}`, 'error');
@@ -3311,60 +3430,78 @@
         e.target.value = '';
       };
 
-      // Inline field update for staging row
+      // Inline field update for staging row with live duplicate checking
       const handleUpdateStagedRow = (tempId, field, value) => {
-        setAgentImportStagingRows(prev => prev.map(row => {
-          if (row.tempId !== tempId) return row;
-          const updated = { ...row, [field]: value };
-          if (field === 'phone' && row.action === 'UPDATE') {
-            updated.phoneChanged = Boolean(value && value !== row.oldPhone);
-          }
-          const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
-          if (field === 'reportingType') {
-            // Auto update leader option if switching between TSE, FLS and BM
-            if (value === 'FLS') {
-              const smList = teamPool.filter(m => m.role === 'SALES_MANAGER');
-              if (smList.length > 0) {
-                updated.reportsToId = smList[0].id;
-                updated.reportsToName = `${smList[0].name} (${smList[0].code})`;
-                updated.reportsToRole = 'SALES_MANAGER';
-              }
-            } else if (value === 'BM') {
-              updated.reportsToId = 'bm-direct';
-              updated.reportsToName = 'Direct to Branch Manager';
-              updated.reportsToRole = 'BRANCH_MANAGER';
-            } else {
-              const tseList = teamPool.filter(m => m.role === 'TSE');
-              if (tseList.length > 0) {
-                updated.reportsToId = tseList[0].id;
-                updated.reportsToName = `${tseList[0].name} (${tseList[0].code})`;
-                updated.reportsToRole = 'TSE';
+        setAgentImportStagingRows(prev => {
+          const updated = prev.map(row => {
+            if (row.tempId !== tempId) return row;
+            const item = { ...row, [field]: value };
+            if (field === 'phone' && row.action === 'UPDATE') {
+              item.phoneChanged = Boolean(value && value !== row.oldPhone);
+            }
+            const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+            if (field === 'reportingType') {
+              if (value === 'FLS') {
+                const smList = teamPool.filter(m => m.role === 'SALES_MANAGER');
+                if (smList.length > 0) {
+                  item.reportsToId = smList[0].id;
+                  item.reportsToName = `${smList[0].name} (${smList[0].code})`;
+                  item.reportsToRole = 'SALES_MANAGER';
+                }
+              } else if (value === 'BM') {
+                item.reportsToId = 'bm-direct';
+                item.reportsToName = 'Direct to Branch Manager';
+                item.reportsToRole = 'BRANCH_MANAGER';
+              } else {
+                const tseList = teamPool.filter(m => m.role === 'TSE');
+                if (tseList.length > 0) {
+                  item.reportsToId = tseList[0].id;
+                  item.reportsToName = `${tseList[0].name} (${tseList[0].code})`;
+                  item.reportsToRole = 'TSE';
+                }
               }
             }
-          }
-          if (field === 'reportsToId') {
-            if (value === 'bm-direct' || value === 'DIRECT_BM') {
-              updated.reportsToId = 'bm-direct';
-              updated.reportsToName = 'Direct to Branch Manager';
-              updated.reportsToRole = 'BRANCH_MANAGER';
-              updated.reportingType = 'BM';
-            } else {
-              const ldr = teamPool.find(m => m.id === value);
-              if (ldr) {
-                updated.reportsToName = `${ldr.name} (${ldr.code})`;
-                updated.reportsToRole = ldr.role;
-                updated.reportingType = ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+            if (field === 'reportsToId') {
+              if (value === 'bm-direct' || value === 'DIRECT_BM') {
+                item.reportsToId = 'bm-direct';
+                item.reportsToName = 'Direct to Branch Manager';
+                item.reportsToRole = 'BRANCH_MANAGER';
+                item.reportingType = 'BM';
+              } else {
+                const ldr = teamPool.find(m => m.id === value);
+                if (ldr) {
+                  item.reportsToName = `${ldr.name} (${ldr.code})`;
+                  item.reportsToRole = ldr.role;
+                  item.reportingType = ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+                }
               }
             }
+            return item;
+          });
+          // Live auto-recheck duplicate codes & names on edit
+          if (field === 'code' || field === 'name') {
+            return checkAndTagDuplicates(updated, branchTeam);
           }
           return updated;
-        }));
+        });
       };
 
       // Remove a row from staging
       const handleRemoveStagedRow = (tempId) => {
-        setAgentImportStagingRows(prev => prev.filter(r => r.tempId !== tempId));
+        setAgentImportStagingRows(prev => {
+          const filtered = prev.filter(r => r.tempId !== tempId);
+          return checkAndTagDuplicates(filtered, branchTeam);
+        });
         showToast('Removed record from staging list.', 'info');
+      };
+
+      // Remove all duplicate records from staging
+      const handleRemoveAllDuplicates = () => {
+        setAgentImportStagingRows(prev => {
+          const nonDups = prev.filter(r => r.action !== 'DUPLICATE');
+          return checkAndTagDuplicates(nonDups, branchTeam);
+        });
+        showToast('🧹 All duplicate records removed from staging table.', 'success');
       };
 
       // Add a blank row manually to staging
@@ -3375,8 +3512,9 @@
         const newRow = {
           tempId: `stage-${Date.now()}-manual`,
           action: 'NEW',
+          duplicateReason: '',
           existingAgentId: null,
-          code: `BDA-${Date.now().toString().slice(-4)}`,
+          code: `BDA-${Math.floor(1000 + Math.random() * 9000)}`,
           name: '',
           phone: '+91 ',
           oldPhone: '',
@@ -3392,7 +3530,7 @@
           clubTier: 'Associate (15%)',
           isValid: true
         };
-        setAgentImportStagingRows(prev => [newRow, ...prev]);
+        setAgentImportStagingRows(prev => checkAndTagDuplicates([newRow, ...prev], branchTeam));
         showToast('Added new editable row to staging table.', 'info');
       };
 
@@ -3440,16 +3578,24 @@
         };
       };
 
-      // Final Confirmation: Directly add and update into the portal database
+      // Final Confirmation: Directly add and update into the portal database with strict duplicate prevention
       const handleConfirmBulkAgentImport = () => {
         if (!agentImportStagingRows || agentImportStagingRows.length === 0) {
           showToast('⚠️ No records to import.', 'warning');
           return;
         }
 
-        const validRows = agentImportStagingRows.filter(r => (r.code && r.code.trim()) || (r.name && r.name.trim()));
+        // Strict filter: Discard nameless or placeholder rows
+        const validRows = (agentImportStagingRows || []).filter(r => {
+          const name = (r.name || '').trim();
+          if (!name) return false;
+          const lower = name.toLowerCase();
+          if (['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(lower)) return false;
+          return true;
+        });
+
         if (validRows.length === 0) {
-          showToast('⚠️ Please ensure records have at least an Agent Code or Full Name.', 'warning');
+          showToast('⚠️ Please ensure records have a valid Agent Name before confirming.', 'warning');
           return;
         }
 
@@ -3457,49 +3603,74 @@
         let newCount = 0;
         let updateCount = 0;
         let phoneUpdateCount = 0;
+        let duplicateSkippedCount = 0;
 
         // Build updated team map
         let updatedTeam = [...branchTeam];
+        const processedCodes = new Set();
+        const processedNames = new Set();
 
         validRows.forEach(row => {
-          if (row.action === 'UPDATE' && row.existingAgentId) {
-            // UPDATE EXISTING AGENT
-            const idx = updatedTeam.findIndex(m => m.id === row.existingAgentId);
-            if (idx !== -1) {
-              const current = updatedTeam[idx];
-              if (row.phoneChanged || (row.phone && row.phone !== current.phone)) {
-                phoneUpdateCount++;
-              }
-              updatedTeam[idx] = {
-                ...current,
-                name: row.name.trim() || current.name,
-                code: row.code.trim().toUpperCase() || current.code,
-                phone: row.phone.trim() || current.phone,
-                email: row.email.trim() || current.email,
-                reportsToId: row.reportsToId || current.reportsToId,
-                reportsToName: row.reportsToName || current.reportsToName,
-                reportsToRole: row.reportsToRole || current.reportsToRole,
-                joinedDate: row.joinedDate || current.joinedDate,
-                territory: row.territory || current.territory,
-                vertical: row.vertical || current.vertical,
-                status: 'Active'
-              };
-              updateCount++;
+          const cleanCode = (row.code || '').trim().toUpperCase();
+          const cleanName = (row.name || '').trim();
+          const lowerName = cleanName.toLowerCase();
+
+          // Auto-skip duplicate codes or names within this batch
+          if (cleanCode && processedCodes.has(cleanCode)) {
+            duplicateSkippedCount++;
+            return;
+          }
+          if (lowerName && processedNames.has(lowerName)) {
+            duplicateSkippedCount++;
+            return;
+          }
+
+          if (cleanCode) processedCodes.add(cleanCode);
+          if (lowerName) processedNames.add(lowerName);
+
+          // Find if agent already exists in updatedTeam (match by existingAgentId OR code OR name)
+          const existingIdx = updatedTeam.findIndex(m => {
+            if (row.existingAgentId && m.id === row.existingAgentId) return true;
+            const mCode = (m.code || '').trim().toUpperCase();
+            const mName = (m.name || '').trim().toLowerCase();
+            return (cleanCode && mCode === cleanCode) || (lowerName && mName === lowerName);
+          });
+
+          if (existingIdx !== -1) {
+            // UPDATE EXISTING AGENT IN-PLACE
+            const current = updatedTeam[existingIdx];
+            if (row.phoneChanged || (row.phone && row.phone !== current.phone)) {
+              phoneUpdateCount++;
             }
+            updatedTeam[existingIdx] = {
+              ...current,
+              name: cleanName || current.name,
+              code: cleanCode || current.code,
+              phone: (row.phone || '').trim() || current.phone,
+              email: (row.email || '').trim() || current.email,
+              reportsToId: row.reportsToId || current.reportsToId,
+              reportsToName: row.reportsToName || current.reportsToName,
+              reportsToRole: row.reportsToRole || current.reportsToRole,
+              joinedDate: row.joinedDate || current.joinedDate,
+              territory: row.territory || current.territory,
+              vertical: row.vertical || current.vertical,
+              status: 'Active'
+            };
+            updateCount++;
           } else {
             // CREATE NEW AGENT RECORD
             const newAgent = {
               id: `tm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               tenantId: currentTenantId,
-              name: row.name.trim() || 'New Advisor',
-              code: row.code.trim().toUpperCase() || `BDA-${Date.now().toString().slice(-4)}`,
+              name: cleanName,
+              code: cleanCode || `BDA-${Math.floor(1000 + Math.random() * 9000)}`,
               role: 'AGENT',
               roleLabel: '🌟 Insurance Advisor (Agent)',
               reportsToId: row.reportsToId || '',
               reportsToName: row.reportsToName || '',
               reportsToRole: row.reportsToRole || (row.reportingType === 'FLS' ? 'SALES_MANAGER' : 'TSE'),
-              email: row.email.trim() || `${(row.name || 'advisor').toLowerCase().replace(/\s+/g, '.')}@branchagency.internal`,
-              phone: row.phone.trim() || '+91 98000 00000',
+              email: (row.email || '').trim() || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@branchagency.internal`,
+              phone: (row.phone || '').trim() || '+91 98000 00000',
               vertical: row.vertical || 'Branch Agency Vertical',
               territory: row.territory || 'Central Metro Hub',
               clubTier: row.clubTier || 'Associate (15%)',
@@ -3525,7 +3696,11 @@
         setShowAgentImportStagingModal(false);
         setAgentImportStagingRows([]);
 
-        showToast(`🎉 Confirmed! Successfully synced ${validRows.length} agents directly to portal (${newCount} new agents created, ${updateCount} updated including ${phoneUpdateCount} phone number updates)!`, 'success');
+        let successMsg = `🎉 Confirmed! Successfully synced ${validRows.length - duplicateSkippedCount} agents to portal (${newCount} new advisors created, ${updateCount} updated)`;
+        if (duplicateSkippedCount > 0) {
+          successMsg += ` [${duplicateSkippedCount} duplicates auto-skipped]`;
+        }
+        showToast(successMsg, 'success');
       };
 
       const handlePurgeBdaDemoData = () => {
@@ -15006,6 +15181,24 @@
                     <span className="px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono font-bold text-xs">
                       ↻ {agentImportStagingRows.filter(r => r.action === 'UPDATE').length} Updates
                     </span>
+                    {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
+                      <span className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono font-bold text-xs flex items-center space-x-1 animate-pulse">
+                        <span>⚠️</span>
+                        <span>{agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length} Duplicates</span>
+                      </span>
+                    )}
+
+                    {/* Quick Remove All Duplicates Button */}
+                    {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAllDuplicates}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-500/50 font-bold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                        title="Remove all duplicate rows with 1 click"
+                      >
+                        <span>🧹 Remove Duplicates</span>
+                      </button>
+                    )}
 
                     {/* Quick Scroll to Bottom Button */}
                     <button
@@ -15024,11 +15217,11 @@
                     <button
                       type="button"
                       onClick={handleConfirmBulkAgentImport}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 flex items-center space-x-1 transition-all"
-                      title="Directly confirm and import all staged agents"
+                      className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md shadow-emerald-950/40 flex items-center space-x-1.5 transition-all ring-1 ring-emerald-400/40"
+                      title="Directly confirm and import all clean agents"
                     >
                       <span>✓</span>
-                      <span>Confirm & Add ({agentImportStagingRows.length})</span>
+                      <span>Confirm & Import ({agentImportStagingRows.filter(r => r.action !== 'DUPLICATE').length})</span>
                     </button>
 
                     <button
@@ -15056,15 +15249,24 @@
                       onClick={() => setAgentImportStatusFilter('NEW')}
                       className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'NEW' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
                     >
-                      New Agents Only ({agentImportStagingRows.filter(r => r.action === 'NEW').length})
+                      New Agents ({agentImportStagingRows.filter(r => r.action === 'NEW').length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setAgentImportStatusFilter('UPDATE')}
                       className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'UPDATE' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
                     >
-                      Updates Only ({agentImportStagingRows.filter(r => r.action === 'UPDATE').length})
+                      Updates ({agentImportStagingRows.filter(r => r.action === 'UPDATE').length})
                     </button>
+                    {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAgentImportStatusFilter('DUPLICATE')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${agentImportStatusFilter === 'DUPLICATE' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-rose-400 hover:text-white border border-rose-500/40'}`}
+                      >
+                        ⚠️ Duplicates ({agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length})
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -15085,7 +15287,7 @@
                       title="Scroll down to bottom of table"
                     >
                       <span>⬇️</span>
-                      <span>Scroll to Bottom</span>
+                      <span>Bottom</span>
                     </button>
                     <button
                       type="button"
@@ -15155,9 +15357,9 @@
                       <thead className="bg-slate-950 text-slate-300 sticky top-0 z-20 border-b border-slate-700 shadow-sm">
                         <tr>
                         <th className="p-2.5">Action</th>
-                        <th className="p-2.5 min-w-[110px]">Agent Code *</th>
-                        <th className="p-2.5 min-w-[150px]">Full Name *</th>
-                        <th className="p-2.5 min-w-[150px]">Phone Number *</th>
+                        <th className="p-2.5 min-w-[120px]">Agent Code *</th>
+                        <th className="p-2.5 min-w-[160px]">Full Name *</th>
+                        <th className="p-2.5 min-w-[150px]">Phone Number</th>
                         <th className="p-2.5 min-w-[160px]">Email Address</th>
                         <th className="p-2.5 min-w-[120px]">Reporting Type</th>
                         <th className="p-2.5 min-w-[180px]">Assigned Leader</th>
@@ -15170,6 +15372,7 @@
                         .filter(row => {
                           if (agentImportStatusFilter === 'NEW' && row.action !== 'NEW') return false;
                           if (agentImportStatusFilter === 'UPDATE' && row.action !== 'UPDATE') return false;
+                          if (agentImportStatusFilter === 'DUPLICATE' && row.action !== 'DUPLICATE') return false;
                           if (agentImportSearch.trim()) {
                             const q = agentImportSearch.toLowerCase().trim();
                             return (
@@ -15183,14 +15386,19 @@
                         })
                         .map((row) => {
                           const isUpdate = row.action === 'UPDATE';
+                          const isDuplicate = row.action === 'DUPLICATE';
                           return (
                             <tr
                               key={row.tempId}
-                              className={`hover:bg-slate-800/50 transition-colors ${isUpdate ? 'bg-indigo-950/10' : 'bg-emerald-950/10'}`}
+                              className={`hover:bg-slate-800/50 transition-colors ${isDuplicate ? 'bg-rose-950/20 border-l-4 border-rose-500' : isUpdate ? 'bg-indigo-950/10' : 'bg-emerald-950/10'}`}
                             >
                               {/* Action Badge */}
                               <td className="p-2.5 whitespace-nowrap">
-                                {isUpdate ? (
+                                {isDuplicate ? (
+                                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold text-[10px] border border-rose-500/40" title={row.duplicateReason || 'Duplicate Code or Name'}>
+                                    <span>⚠️ DUPLICATE</span>
+                                  </span>
+                                ) : isUpdate ? (
                                   <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px] border border-indigo-500/30">
                                     <span>↻ UPDATE</span>
                                   </span>
@@ -15207,8 +15415,11 @@
                                   type="text"
                                   value={row.code}
                                   onChange={(e) => handleUpdateStagedRow(row.tempId, 'code', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500"
+                                  className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500 ${isDuplicate && row.duplicateReason && row.duplicateReason.includes('Code') ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-700'}`}
                                 />
+                                {isDuplicate && row.duplicateReason && row.duplicateReason.includes('Code') && (
+                                  <div className="text-[10px] text-rose-400 font-sans mt-0.5 font-medium">{row.duplicateReason}</div>
+                                )}
                               </td>
 
                               {/* Full Name (Editable) */}
@@ -15217,8 +15428,12 @@
                                   type="text"
                                   value={row.name}
                                   onChange={(e) => handleUpdateStagedRow(row.tempId, 'name', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
+                                  placeholder="Agent Name *"
+                                  className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500 ${isDuplicate && row.duplicateReason && row.duplicateReason.includes('Name') ? 'border-rose-500 ring-1 ring-rose-500/50' : !row.name.trim() ? 'border-amber-500' : 'border-slate-700'}`}
                                 />
+                                {isDuplicate && row.duplicateReason && row.duplicateReason.includes('Name') && (
+                                  <div className="text-[10px] text-rose-400 font-sans mt-0.5 font-medium">{row.duplicateReason}</div>
+                                )}
                               </td>
 
                               {/* Phone Number (Editable with Old Phone badge) */}
@@ -15353,7 +15568,12 @@
                 <div className="p-3 sm:p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-10">
                   <div className="text-xs text-slate-400 flex items-center space-x-3">
                     <span>
-                      Ready to sync <strong className="text-white font-mono">{agentImportStagingRows.length} records</strong> directly to the portal roster.
+                      Ready to sync <strong className="text-white font-mono">{agentImportStagingRows.filter(r => r.action !== 'DUPLICATE').length} clean records</strong> directly to portal roster.
+                      {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
+                        <span className="text-rose-400 font-semibold ml-1.5">
+                          ({agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length} duplicates will be automatically skipped)
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
@@ -15370,6 +15590,18 @@
                   </div>
 
                   <div className="flex items-center space-x-2.5">
+                    {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAllDuplicates}
+                        className="px-3.5 py-2 bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600/50 rounded-xl font-bold transition-colors text-xs flex items-center space-x-1"
+                        title="Remove duplicate rows"
+                      >
+                        <span>🧹</span>
+                        <span>Remove Duplicates</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
@@ -15384,10 +15616,10 @@
                     <button
                       type="button"
                       onClick={handleConfirmBulkAgentImport}
-                      className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/50 flex items-center space-x-1.5 transition-all"
+                      className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold rounded-xl shadow-xl shadow-emerald-950/60 flex items-center space-x-2 transition-all transform hover:scale-[1.01] ring-1 ring-emerald-400/50"
                     >
-                      <span>✓</span>
-                      <span>Confirm & Directly Add to Portal ({agentImportStagingRows.length} Records)</span>
+                      <span className="text-base">✓</span>
+                      <span className="text-sm">Confirm & Directly Add to Portal ({agentImportStagingRows.filter(r => r.action !== 'DUPLICATE').length} Clean Records)</span>
                     </button>
                   </div>
                 </div>
