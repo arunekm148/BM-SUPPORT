@@ -197,6 +197,27 @@ html, body {
   background: var(--text-muted);
 }
 
+.scrollbar-prominent {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #0f172a;
+}
+.scrollbar-prominent::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.scrollbar-prominent::-webkit-scrollbar-track {
+  background: #0b1120;
+  border-radius: 8px;
+}
+.scrollbar-prominent::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 8px;
+  border: 2px solid #0b1120;
+}
+.scrollbar-prominent::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+
 /* Base Form Elements Reset */
 button {
   cursor: pointer;

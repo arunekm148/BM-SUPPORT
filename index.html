@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="Click to Connect" />
 
   <!-- Local Offline CSS (Zero External CDN Dependency) -->
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 
   <!-- React 18 & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -62,6 +62,27 @@
     }
     .btn-test-run {
       animation: pulseGlow 2.5s infinite;
+    }
+    /* Prominent visible scrollbar for data tables & staging modal */
+    .scrollbar-prominent {
+      scrollbar-width: thin;
+      scrollbar-color: #10b981 #0f172a;
+    }
+    .scrollbar-prominent::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    .scrollbar-prominent::-webkit-scrollbar-track {
+      background: #0b1120;
+      border-radius: 8px;
+    }
+    .scrollbar-prominent::-webkit-scrollbar-thumb {
+      background: #10b981;
+      border-radius: 8px;
+      border: 2px solid #0b1120;
+    }
+    .scrollbar-prominent::-webkit-scrollbar-thumb:hover {
+      background: #059669;
     }
   </style>
   <!-- Instant Theme Initializer (Defaults to Clean Light Theme) -->
@@ -3095,22 +3116,31 @@
 
               // Extracted fields
               let rawCode = extractRowVal(row, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id', 'agent_code', 'agent code', 'advisor code']);
-              let rawName = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor', 'agent_name', 'agent name', 'full_name']);
+              let rawName = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor', 'agent_name', 'agent name', 'full_name', 'advisor name']);
               const rawPhone = extractRowVal(row, ['phone', 'phonenumber', 'mobile', 'mobileno', 'contact', 'contactno', 'tel', 'cell']);
               const rawEmail = extractRowVal(row, ['email', 'emailid', 'mail', 'emailaddress']);
               const rawReporting = extractRowVal(row, ['reportingtype', 'type', 'hierarchy', 'segment', 'channel', 'role']);
-              const rawLeader = extractRowVal(row, ['leader', 'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reportstoname', 'dl']);
+              let rawLeader = extractRowVal(row, ['tsename', 'tse_name', 'tse name', 'tseleader', 'tse leader', 'leader', 'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reportstoname', 'dl', 'reporting manager', 'reporting to', 'tse / dl', 'tse/dl', 'tse leader name', 'tse distribution leader', 'distribution leader']);
+              const rawTseCode = extractRowVal(row, ['tsecode', 'tse_code', 'tse code', 'leadercode', 'leader_code', 'managercode', 'manager code']);
               const rawDate = extractRowVal(row, ['date', 'joineddate', 'codingdate', 'doj', 'createddate', 'created_at']);
               const rawTerritory = extractRowVal(row, ['territory', 'location', 'branch', 'region', 'area']);
 
-              // Flexible fallback if only 2 columns present without standard headers
+              // Flexible fallback if columns present without standard headers
               const rowKeys = Object.keys(row);
               if (!rawCode && !rawName && rowKeys.length >= 2) {
                 rawCode = String(row[rowKeys[0]] || '').trim();
                 rawName = String(row[rowKeys[1]] || '').trim();
+                if (rowKeys.length >= 3 && !rawLeader) {
+                  rawLeader = String(row[rowKeys[2]] || '').trim();
+                }
               } else if (!rawCode && rowKeys.length === 2) {
                 const otherKey = rowKeys.find(k => k !== rowKeys[1]);
                 if (otherKey) rawCode = String(row[otherKey] || '').trim();
+              }
+              // If we have rawCode and rawName and 3rd column exists but rawLeader wasn't found by alias
+              if (!rawLeader && rowKeys.length >= 3) {
+                const thirdKey = rowKeys.find((k, idx) => idx === 2 || /tse|leader|manager|report/i.test(k));
+                if (thirdKey) rawLeader = String(row[thirdKey] || '').trim();
               }
 
               // Resolve Hierarchy & Leader:
@@ -3119,19 +3149,60 @@
               let reportsToName = '';
               let reportsToRole = 'TSE';
 
-              // 1. If explicit leader in file
-              if (rawLeader) {
-                const qLeader = rawLeader.toLowerCase().trim();
+              // 1. If explicit leader or TSE in file
+              if (rawTseCode) {
+                const qTseCode = rawTseCode.toLowerCase().trim();
                 const matchedLeader = teamPool.find(m =>
-                  m.name.toLowerCase().includes(qLeader) ||
-                  m.code.toLowerCase().includes(qLeader) ||
-                  m.id.toLowerCase() === qLeader
+                  (m.code && m.code.toLowerCase().trim() === qTseCode) ||
+                  (m.id && m.id.toLowerCase().trim() === qTseCode)
                 );
                 if (matchedLeader) {
                   reportsToId = matchedLeader.id;
                   reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
                   reportsToRole = matchedLeader.role;
                   reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+                }
+              }
+
+              if (!reportsToId && rawLeader) {
+                const qLeader = rawLeader.toLowerCase().trim();
+                // 1. Bidirectional full match (handles "CHINJU JOSEPH (1789423-01)" or "CHINJU JOSEPH")
+                let matchedLeader = teamPool.find(m => {
+                  const mName = (m.name || '').toLowerCase().trim();
+                  const mCode = (m.code || '').toLowerCase().trim();
+                  const mId = (m.id || '').toLowerCase().trim();
+                  if (!mName && !mCode) return false;
+                  return (
+                    (mName && (mName.includes(qLeader) || qLeader.includes(mName))) ||
+                    (mCode && (mCode.includes(qLeader) || qLeader.includes(mCode))) ||
+                    (mId && (mId === qLeader || qLeader.includes(mId)))
+                  );
+                });
+                // 2. Token match if multi-word (e.g. "CHINJU" or "JOSEPH")
+                if (!matchedLeader) {
+                  const tokens = qLeader.split(/[\s\-()/,]+/).filter(t => t.length >= 3);
+                  if (tokens.length > 0) {
+                    matchedLeader = teamPool.find(m => {
+                      const mName = (m.name || '').toLowerCase();
+                      const mCode = (m.code || '').toLowerCase();
+                      return tokens.some(tok => mName.includes(tok) || mCode.includes(tok));
+                    });
+                  }
+                }
+                if (matchedLeader) {
+                  reportsToId = matchedLeader.id;
+                  reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
+                  reportsToRole = matchedLeader.role;
+                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+                } else {
+                  // Leader specified in file but not yet in teamPool: default to TSE role and preserve leader name
+                  reportingType = 'TSE';
+                  reportsToRole = 'TSE';
+                  reportsToName = rawLeader;
+                  if (defaultTse) {
+                    reportsToId = defaultTse.id;
+                    reportsToName = `${defaultTse.name} (${defaultTse.code})`;
+                  }
                 }
               }
 
@@ -3325,21 +3396,25 @@
         showToast('Added new editable row to staging table.', 'info');
       };
 
-      // Download Clean Sample Excel (.xlsx) or CSV Template (Agent Code & Full Name Only)
+      // Download Clean Sample Excel (.xlsx) or CSV Template (Agent Code, Agent Name & TSE Name)
       const handleDownloadAgentTemplate = (format = 'xlsx') => {
+        const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+        const tseLeaders = teamPool.filter(m => m.role === 'TSE');
+        const defaultTseOption = tseLeaders[0] ? `${tseLeaders[0].name} (${tseLeaders[0].code})` : 'CHINJU JOSEPH (1789423-01)';
+
         const sampleRows = [
-          ['Agent Code', 'Full Name'],
-          ['1001543-01', 'Omana Mv'],
-          ['1149248-01', 'Rajoy Mathew George'],
-          ['1157482-01', 'Nivedya K N'],
-          ['1158572-01', 'Vinu Varghese'],
-          ['1158925-01', 'Pushpakaran M']
+          ['Agent Code', 'Agent Name', 'TSE Name', 'Phone Number'],
+          ['1001543-01', 'Omana Mv', defaultTseOption, '+91 98000 00001'],
+          ['1149248-01', 'Rajoy Mathew George', defaultTseOption, '+91 98000 00002'],
+          ['1157482-01', 'Nivedya K N', defaultTseOption, '+91 98000 00003'],
+          ['1158572-01', 'Vinu Varghese', defaultTseOption, '+91 98000 00004'],
+          ['1158925-01', 'Pushpakaran M', defaultTseOption, '+91 98000 00005']
         ];
 
         if (format === 'xlsx' && window.XLSX) {
           const wb = window.XLSX.utils.book_new();
           const ws = window.XLSX.utils.aoa_to_sheet(sampleRows);
-          ws['!cols'] = [{ wch: 18 }, { wch: 30 }];
+          ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 32 }, { wch: 18 }];
           // Format Agent Code cells as string so Excel does not convert to scientific notation
           for (let r = 1; r < sampleRows.length; r++) {
             const cellRef = window.XLSX.utils.encode_cell({ r, c: 0 });
@@ -3349,19 +3424,19 @@
             }
           }
           window.XLSX.utils.book_append_sheet(wb, ws, 'Agents');
-          window.XLSX.writeFile(wb, 'Sample_Agent_Upload_Code_and_Name_Only.xlsx');
-          showToast('📥 Downloaded Clean Sample Excel (.xlsx) with Agent Code & Name only!', 'success');
+          window.XLSX.writeFile(wb, 'Sample_Agent_Upload_Code_Name_TSE.xlsx');
+          showToast('📥 Downloaded Clean Sample Excel (.xlsx) with Agent Code, Agent Name & TSE Name!', 'success');
         } else {
           const csvContent = sampleRows.map(r => r.map(val => `"${val}"`).join(',')).join('\n');
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.setAttribute('href', url);
-          link.setAttribute('download', 'Sample_Agent_Upload_Code_and_Name_Only.csv');
+          link.setAttribute('download', 'Sample_Agent_Upload_Code_Name_TSE.csv');
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          showToast('📥 Downloaded Clean Sample CSV with Agent Code & Name only!', 'success');
+          showToast('📥 Downloaded Clean Sample CSV with Agent Code, Agent Name & TSE Name!', 'success');
         };
       };
 
@@ -14820,7 +14895,7 @@
                     </select>
 
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      💡 Since your Excel only contains <strong>Agent Code</strong> and <strong>Full Name</strong>, selecting a leader above will assign all uploaded agents to that leader automatically.
+                      💡 Include a <strong>TSE Name</strong> column in your Excel/CSV to automatically assign and populate each agent to their respective TSE Leader! You can also pick a default leader above or bulk-reassign in the staging review.
                     </p>
                   </div>
 
@@ -14841,7 +14916,7 @@
                         Click to select Excel (.xlsx, .xls) or CSV
                       </div>
                       <p className="text-xs text-slate-400">
-                        Only 2 columns required: <strong>Agent Code</strong> and <strong>Full Name</strong> (Phone & Email optional)
+                        Includes: <strong>Agent Code</strong>, <strong>Agent Name</strong>, and <strong>TSE Name</strong> (Auto-populated). Phone & Email optional.
                       </p>
                     </label>
                   </div>
@@ -14850,10 +14925,10 @@
                   <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-300 space-y-1">
                     <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-xs">
                       <span>💡</span>
-                      <span>Smart Phone & Profile Update Facility:</span>
+                      <span>Smart TSE Auto-Mapping & Phone Update:</span>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      If an uploaded Agent Code matches an existing advisor in the portal, it will automatically stage as an <strong>UPDATE</strong> with their new Phone Number. You will be able to review and edit all fields in the Staging View before anything is added to the portal database!
+                      The system matches <strong>TSE Name</strong> to your branch's TSE Leaders and automatically links each agent. If an Agent Code already exists, it updates their contact and leader details. You can review and edit every single row in the staging list!
                     </p>
                   </div>
 
@@ -14864,7 +14939,7 @@
                         type="button"
                         onClick={() => handleDownloadAgentTemplate('xlsx')}
                         className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-colors shadow-sm"
-                        title="Download clean sample Excel with Agent Code and Name only"
+                        title="Download sample Excel with Agent Code, Agent Name & TSE Name"
                       >
                         <span>⬇️</span>
                         <span>Download Sample Excel (.xlsx)</span>
@@ -14899,10 +14974,10 @@
           {/* User can review, edit and click "Confirm & Add Directly to Portal" */}
           {/* ====================================================== */}
           {showAgentImportStagingModal && (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-6xl w-full text-xs text-slate-200 shadow-2xl animate-fadeIn max-h-[94vh] flex flex-col overflow-hidden">
+            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md overflow-y-auto flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4">
+              <div className="relative bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl max-w-6xl w-full text-xs text-slate-200 shadow-2xl animate-fadeIn flex flex-col h-[94vh] max-h-[94vh] overflow-hidden my-auto ring-1 ring-white/10">
                 {/* 1. Staging Modal Header */}
-                <div className="p-4 sm:p-5 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+                <div className="p-3 sm:p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5 shrink-0">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
                       📋
@@ -14915,28 +14990,51 @@
                         </span>
                       </h3>
                       <p className="text-[11px] text-slate-400">
-                        Review all records below. You can edit any field (e.g. Phone Number, Code, Leader) inline. Click Confirm to apply directly to the portal database.
+                        Review all records below. You can edit any field inline. Scroll to view rows or click Confirm to add to the portal database.
                       </p>
                     </div>
                   </div>
 
-                  {/* Summary Badges */}
-                  <div className="flex flex-wrap items-center gap-2">
+                  {/* Summary Badges & Quick Action Controls */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <span className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 font-mono font-bold text-xs">
                       Total: {agentImportStagingRows.length}
                     </span>
                     <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold text-xs">
-                      + {agentImportStagingRows.filter(r => r.action === 'NEW').length} New Agents
+                      + {agentImportStagingRows.filter(r => r.action === 'NEW').length} New
                     </span>
                     <span className="px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono font-bold text-xs">
                       ↻ {agentImportStagingRows.filter(r => r.action === 'UPDATE').length} Updates
                     </span>
-                    <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold text-xs">
-                      📞 {agentImportStagingRows.filter(r => r.phoneChanged).length} Phone Changes
-                    </span>
+
+                    {/* Quick Scroll to Bottom Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('stagingTableContainer');
+                        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 font-bold text-xs flex items-center space-x-1 border border-slate-700 transition-colors shadow-sm"
+                      title="Scroll table down to bottom"
+                    >
+                      <span>⬇️ Bottom</span>
+                    </button>
+
+                    {/* Direct Quick Confirm Button in Header */}
+                    <button
+                      type="button"
+                      onClick={handleConfirmBulkAgentImport}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 flex items-center space-x-1 transition-all"
+                      title="Directly confirm and import all staged agents"
+                    >
+                      <span>✓</span>
+                      <span>Confirm & Add ({agentImportStagingRows.length})</span>
+                    </button>
+
                     <button
                       onClick={() => setShowAgentImportStagingModal(false)}
-                      className="text-slate-400 hover:text-white p-1 ml-2 text-base"
+                      className="text-slate-400 hover:text-white p-1.5 text-base rounded-lg hover:bg-slate-800"
+                      title="Close modal"
                     >
                       ✕
                     </button>
@@ -14977,6 +15075,18 @@
                       placeholder="Search staged rows..."
                       className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-44 sm:w-52"
                     />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('stagingTableContainer');
+                        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                      }}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 rounded-lg font-bold text-xs flex items-center space-x-1"
+                      title="Scroll down to bottom of table"
+                    >
+                      <span>⬇️</span>
+                      <span>Scroll to Bottom</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleAddStagedRowManual}
@@ -15039,10 +15149,11 @@
                 </div>
 
                 {/* 3. Interactive Staging Table with Inline Inputs */}
-                <div className="flex-1 overflow-y-auto overflow-x-auto p-2">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-950 text-slate-400 sticky top-0 z-10 border-b border-slate-800">
-                      <tr>
+                <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div id="stagingTableContainer" className="flex-1 min-h-0 overflow-y-auto overflow-x-auto p-2 scrollbar-prominent">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-950 text-slate-300 sticky top-0 z-20 border-b border-slate-700 shadow-sm">
+                        <tr>
                         <th className="p-2.5">Action</th>
                         <th className="p-2.5 min-w-[110px]">Agent Code *</th>
                         <th className="p-2.5 min-w-[150px]">Full Name *</th>
@@ -15211,10 +15322,51 @@
                   </table>
                 </div>
 
+                {/* Floating Quick Scroll Controls */}
+                <div className="absolute bottom-3 right-5 z-30 flex items-center space-x-2 bg-slate-950/95 backdrop-blur-md border border-slate-700 p-1.5 rounded-2xl shadow-2xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('stagingTableContainer');
+                      if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center space-x-1 transition-colors border border-slate-700 shadow-sm"
+                    title="Scroll to Top of Table"
+                  >
+                    <span>⬆️ Top</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('stagingTableContainer');
+                      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center space-x-1 transition-colors shadow-md shadow-emerald-950/50"
+                    title="Scroll to Bottom / Footer Confirm Buttons"
+                  >
+                    <span>⬇️ Bottom (Confirm)</span>
+                  </button>
+                </div>
+              </div>
+
                 {/* 4. Footer with Confirmation Buttons */}
-                <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-                  <div className="text-xs text-slate-400">
-                    Ready to sync <strong className="text-white font-mono">{agentImportStagingRows.length} records</strong> directly to the portal roster.
+                <div className="p-3 sm:p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-10">
+                  <div className="text-xs text-slate-400 flex items-center space-x-3">
+                    <span>
+                      Ready to sync <strong className="text-white font-mono">{agentImportStagingRows.length} records</strong> directly to the portal roster.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('stagingTableContainer');
+                        if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors"
+                      title="Scroll to top of table"
+                    >
+                      <span>⬆️</span>
+                      <span>Back to Top</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center space-x-2.5">
