@@ -12,8 +12,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Click to Connect" />
 
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
   <!-- Local Offline CSS (Zero External CDN Dependency) -->
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=6" />
 
   <!-- React 18 & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -179,8 +183,8 @@
         localStorage.setItem('bms_clean_products_v11', 'true');
       }
 
-      // Cache Migration v12: Auto-purge nameless bogus "Advisor Name" / "New Advisor" agents and deduplicate branch roster
-      if (!localStorage.getItem('bms_clean_nameless_agents_v12')) {
+      // Cache Migration v13: Aggressively auto-purge any nameless bogus "Advisor Name" / "New Advisor" agents and deduplicate branch roster
+      if (!localStorage.getItem('bms_clean_nameless_agents_v13')) {
         const rawTeam = localStorage.getItem('bms_branch_team_v3');
         if (rawTeam) {
           try {
@@ -191,7 +195,7 @@
               const name = (m.name || '').trim();
               const code = (m.code || '').trim().toUpperCase();
               if (!name || name.toLowerCase() === 'advisor name' || name.toLowerCase() === 'new advisor') return false;
-              if (code && code.startsWith('BDA-259')) return false;
+              if (code && (code.startsWith('BDA-259') || code.startsWith('BDA-617') || code.startsWith('BDA-80'))) return false;
               if (code && seenCodes.has(code)) return false;
               if (name && seenNames.has(name.toLowerCase())) return false;
               if (code) seenCodes.add(code);
@@ -201,7 +205,7 @@
             localStorage.setItem('bms_branch_team_v3', JSON.stringify(cleanTeam));
           } catch(err) {}
         }
-        localStorage.setItem('bms_clean_nameless_agents_v12', 'true');
+        localStorage.setItem('bms_clean_nameless_agents_v13', 'true');
       }
     } catch (e) {}
 
@@ -2228,7 +2232,7 @@
             if (demoNames.includes(m.name)) return false;
             if (m.tenantId === 'tnt-101' || m.tenantId === 'tnt-102' || m.tenantId === 'tnt-103') return false;
             if (m.id && m.id.startsWith('tm-bda-')) return false;
-            if (m.code && (m.code.toUpperCase().startsWith('BDA-80') || m.code.toUpperCase().startsWith('BDA-259'))) return false;
+            if (m.code && (m.code.toUpperCase().startsWith('BDA-80') || m.code.toUpperCase().startsWith('BDA-259') || m.code.toUpperCase().startsWith('BDA-617'))) return false;
             const mName = (m.name || '').trim();
             const mCode = (m.code || '').trim().toUpperCase();
             if (!mName || mName.toLowerCase() === 'advisor name' || mName.toLowerCase() === 'new advisor') return false;
@@ -3038,10 +3042,21 @@
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
           const values = splitCsvLine(lines[i]).map(v => v.replace(/^["']|["']$/g, '').trim());
+          // Discard row if all values are blank
+          if (values.every(v => !v)) continue;
+
           const obj = {};
           headers.forEach((h, idx) => {
             obj[h] = values[idx] || '';
           });
+
+          // Discard orphaned rows where agent name and code are both blank (even if leader column has a name)
+          const agentNameVal = extractRowVal(obj, ['name', 'agentname', 'fullname', 'advisorname', 'advisor', 'agent_name', 'agent name', 'full_name']);
+          const agentCodeVal = extractRowVal(obj, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id', 'agent_code', 'agent code']);
+          if (!agentNameVal && !agentCodeVal) {
+            continue;
+          }
+
           rows.push(obj);
         }
         return rows;
@@ -3181,7 +3196,12 @@
               const workbook = window.XLSX.read(arrayBuffer, { type: 'array', cellText: true, cellDates: true });
               const firstSheetName = workbook.SheetNames[0];
               const worksheet = workbook.Sheets[firstSheetName];
-              rawData = window.XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+              const sheetRows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+              rawData = (sheetRows || []).filter(row => {
+                const nameVal = extractRowVal(row, ['name', 'agentname', 'fullname', 'advisorname', 'advisor', 'agent_name', 'agent name', 'full_name']);
+                const codeVal = extractRowVal(row, ['code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id', 'agent_code', 'agent code']);
+                return Boolean((nameVal && nameVal.trim()) || (codeVal && codeVal.trim()));
+              });
             } else {
               const textContent = typeof loadEvent.target.result === 'string'
                 ? loadEvent.target.result
@@ -3190,7 +3210,7 @@
             }
 
             if (!rawData || rawData.length === 0) {
-              showToast('⚠️ Could not find any valid rows in uploaded file. Please check file format.', 'warning');
+              showToast('⚠️ Could not find any valid agent rows in uploaded file. Please check file format.', 'warning');
               return;
             }
 
@@ -3237,10 +3257,15 @@
                 if (thirdKey) rawLeader = String(row[thirdKey] || '').trim();
               }
 
+              // Discard row immediately if both code and name are missing
+              if (!rawCode && !rawName) {
+                return null;
+              }
+
               // MATCH AGAINST EXISTING AGENTS IN PORTAL
               const cleanCode = (rawCode || '').trim().toUpperCase();
               const cleanPhone = (rawPhone || '').trim().replace(/[^0-9+]/g, '');
-              const cleanName = (rawName || '').trim();
+              let cleanName = (rawName || '').trim();
               const lowerName = cleanName.toLowerCase();
               const isPlaceholderName = !cleanName ||
                 ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(lowerName);
@@ -3257,10 +3282,17 @@
                        (rawEmail && mEmail && mEmail === rawEmail.trim().toLowerCase());
               });
 
-              // RESOLVE REAL NAME: if nameless and not in existingAgent, SKIP ROW COMPLETELY
-              const finalName = cleanName || (existingAgent ? existingAgent.name : '');
+              // Strict requirement: If cleanName is blank or placeholder, check if existing agent matches by code
+              if (isPlaceholderName) {
+                if (cleanCode && existingAgent && existingAgent.name) {
+                  cleanName = existingAgent.name;
+                } else {
+                  return null; // Skip empty / nameless row completely
+                }
+              }
+
+              const finalName = cleanName;
               if (!finalName || ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(finalName.toLowerCase())) {
-                // Skip empty or nameless row completely
                 return null;
               }
 
@@ -3409,11 +3441,15 @@
             setShowAgentExcelImportModal(false);
             setShowAgentImportStagingModal(true);
 
-            if (dupCount > 0) {
-              showToast(`📂 Staged ${taggedStaged.length} records. ⚠️ Auto-detected ${dupCount} duplicate records! You can remove or edit them before confirming.`, 'warning');
-            } else {
-              showToast(`📂 Successfully loaded ${taggedStaged.length} clean records from "${file.name}" into Staging Review!`, 'success');
+            const skippedBlankRows = rawData.length - taggedStaged.length;
+            let msg = `📂 Successfully staged ${taggedStaged.length} valid agents from "${file.name}".`;
+            if (skippedBlankRows > 0) {
+              msg += ` (Filtered out ${skippedBlankRows} empty rows)`;
             }
+            if (dupCount > 0) {
+              msg += ` ⚠️ Detected ${dupCount} duplicate records!`;
+            }
+            showToast(msg, dupCount > 0 ? 'warning' : 'success');
           } catch (err) {
             console.error('Error parsing agent file:', err);
             showToast(`❌ Error reading file: ${err.message}`, 'error');
@@ -15200,6 +15236,24 @@
                       </button>
                     )}
 
+                    {/* Quick Remove Any Blank or Placeholder Name Rows */}
+                    {agentImportStagingRows.some(r => !r.name.trim() || ['advisor name', 'new advisor', 'agent name'].includes(r.name.toLowerCase())) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAgentImportStagingRows(prev => {
+                            const filtered = prev.filter(r => r.name.trim() && !['advisor name', 'new advisor', 'agent name'].includes(r.name.toLowerCase()));
+                            return checkAndTagDuplicates(filtered, branchTeam);
+                          });
+                          showToast('🧹 Cleaned all blank / placeholder rows!', 'info');
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-500/50 font-bold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                        title="Remove any rows with blank or placeholder names"
+                      >
+                        <span>🧹 Clean Blank Rows</span>
+                      </button>
+                    )}
+
                     {/* Quick Scroll to Bottom Button */}
                     <button
                       type="button"
@@ -15599,6 +15653,24 @@
                       >
                         <span>🧹</span>
                         <span>Remove Duplicates</span>
+                      </button>
+                    )}
+
+                    {agentImportStagingRows.some(r => !r.name.trim() || ['advisor name', 'new advisor', 'agent name'].includes(r.name.toLowerCase())) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAgentImportStagingRows(prev => {
+                            const filtered = prev.filter(r => r.name.trim() && !['advisor name', 'new advisor', 'agent name'].includes(r.name.toLowerCase()));
+                            return checkAndTagDuplicates(filtered, branchTeam);
+                          });
+                          showToast('🧹 Cleaned all blank / placeholder rows!', 'info');
+                        }}
+                        className="px-3.5 py-2 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-600/50 rounded-xl font-bold transition-colors text-xs flex items-center space-x-1"
+                        title="Remove blank/placeholder rows"
+                      >
+                        <span>🧹</span>
+                        <span>Clean Blank Rows</span>
                       </button>
                     )}
 
