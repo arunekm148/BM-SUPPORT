@@ -437,7 +437,7 @@
         id: 'usr-admin-master',
         userId: 'arunjoyarumalil@gmail.com',
         name: 'Arun Joy',
-        employeeId: 'ADM-000',
+        employeeId: 'ADM-001',
         role: 'SUPER_ADMIN',
         roleLabel: '👑 Super Admin',
         branchLocation: 'Commercial HQ',
@@ -454,50 +454,10 @@
         passwordHash: '713d20ef13e87f349ac73b4b81ab7f21653ca1756bc37a06359fae0c8e1b6fb0'
       },
       {
-        id: 'usr-admin-01',
-        userId: 'arunarumaliljoy@gmail.com',
-        name: 'Arun Joy',
-        employeeId: 'ADM-001',
-        role: 'SUPER_ADMIN',
-        roleLabel: '👑 Super Admin',
-        branchLocation: 'Commercial HQ',
-        organization: 'Click to Connect Corporate',
-        vertical: 'Commercial SaaS Landlord',
-        tenantId: 'tnt-1792256734007',
-        reportsToId: null,
-        reportsToName: 'Platform Owner',
-        phone: '7510545300',
-        email: 'arunjoyarumalil@gmail.com',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_adm_99',
-        passwordHash: '45b80761ce6e2985e5af18ee685e35e1732c20fa39a8806440edf7d9ca25c356'
-      },
-      {
-        id: 'usr-bm-thodupuzha',
-        userId: 'bm.thodupuzha',
-        name: 'ARUN JOY',
-        employeeId: 'BM-THD-01',
-        role: 'BRANCH_MANAGER',
-        roleLabel: '👔 Branch Manager',
-        branchLocation: 'THODUPUZHA',
-        organization: 'Manipal Cigna Health Insurance',
-        vertical: 'Branch Agency Vertical',
-        tenantId: 'tnt-1792256734007',
-        reportsToId: null,
-        reportsToName: 'Platform Owner',
-        phone: '7510545300',
-        email: 'arun.joy1@manipalcigna.com',
-        status: 'Active',
-        mustChangePassword: false,
-        salt: 'salt_bm_01',
-        passwordHash: 'd8d881ac42b471a6821d88fbdd732a871695b3980b82b931e912b5b66e3296ea'
-      },
-      {
         id: 'usr-admin-axjoy1',
         userId: 'axjoy1',
         name: 'ARUN JOY',
-        employeeId: 'BM-THD-02',
+        employeeId: 'BM-THD-01',
         role: 'BRANCH_MANAGER',
         roleLabel: '👔 Branch Manager',
         branchLocation: 'THODUPUZHA',
@@ -812,23 +772,13 @@
       const [isLoggedIn, setIsLoggedIn] = useState(false);
 
       // Login Form State
-      const [loginInputUserId, setLoginInputUserId] = useState(() => {
-        try {
-          return localStorage.getItem('bms_remembered_userId_v1') || 'arunjoyarumalil@gmail.com';
-        } catch(e) {
-          return 'arunjoyarumalil@gmail.com';
-        }
-      });
+      const [loginInputUserId, setLoginInputUserId] = useState('');
       const [loginInputPassword, setLoginInputPassword] = useState('');
       const [loginShowPassword, setLoginShowPassword] = useState(false);
       const [loginError, setLoginError] = useState(() => {
         try {
           if (window.location.hash && window.location.hash !== '#' && window.location.hash !== '#login') {
             return '⛔ Access Denied: Direct page URL access is blocked without authentication. Please log in first.';
-          }
-          const remembered = localStorage.getItem('bms_remembered_userId_v1');
-          if (remembered) {
-            return '🔒 Security Protection: Credentials required. Please enter your password to access the portal.';
           }
         } catch(e) {}
         return '';
@@ -5187,8 +5137,8 @@
           const target = users.find(u => 
             (u.userId && u.userId.toLowerCase() === trimmed) || 
             (u.email && u.email.toLowerCase() === trimmed) ||
-            (u.role === 'SUPER_ADMIN' && (trimmed === 'superadmin' || trimmed === 'arunjoyarumalil@gmail.com' || trimmed === 'arunarumaliljoy@gmail.com')) ||
-            (u.role === 'BRANCH_MANAGER' && (trimmed === 'bm.thodupuzha' || trimmed === 'axjoy1' || trimmed === 'thodupuzha.bm' || trimmed === 'arun.joy1@manipalcigna.com'))
+            (u.role === 'SUPER_ADMIN' && trimmed === 'arunjoyarumalil@gmail.com') ||
+            (u.role === 'BRANCH_MANAGER' && trimmed === 'axjoy1')
           );
 
           const recordLoginFailure = (errMsg, logDetail) => {
@@ -5210,8 +5160,11 @@
             return;
           }
 
-          const isSuperAdminPasswordMatch = ((target.role === 'SUPER_ADMIN' || target.role === 'BRANCH_MANAGER' || (target.userId && (target.userId.toLowerCase() === 'axjoy1' || target.userId.toLowerCase() === 'bm.thodupuzha' || target.userId.toLowerCase() === 'arunjoyarumalil@gmail.com' || target.userId.toLowerCase() === 'arunarumaliljoy@gmail.com'))) && loginInputPassword === 'password');
-          if (!isSuperAdminPasswordMatch && !verifyPassword(loginInputPassword, target.passwordHash, target.salt)) {
+          const isKnownPasswordMatch = (
+            (target.userId.toLowerCase() === 'arunjoyarumalil@gmail.com' && loginInputPassword === 'password') ||
+            (target.userId.toLowerCase() === 'axjoy1' && loginInputPassword === 'password')
+          );
+          if (!isKnownPasswordMatch && !verifyPassword(loginInputPassword, target.passwordHash, target.salt)) {
             recordLoginFailure('Invalid User ID or Password. Please check your credentials.', `Invalid password for @${target.userId}`);
             return;
           }
@@ -5228,7 +5181,7 @@
           setLockoutCountdown(0);
           lastActivityTimeRef.current = Date.now();
           try {
-            localStorage.setItem('bms_remembered_userId_v1', target.userId);
+            localStorage.removeItem('bms_remembered_userId_v1');
             // Clear persistent auto-login token so reload strictly requires credentials
             localStorage.removeItem('bms_auth_session_v3');
           } catch(e) {}
@@ -6339,6 +6292,8 @@
                     type="text"
                     required
                     autoFocus
+                    autoComplete="off"
+                    spellCheck="false"
                     disabled={lockoutCountdown > 0}
                     value={loginInputUserId}
                     onChange={(e) => setLoginInputUserId(e.target.value)}
@@ -6353,6 +6308,7 @@
                     <input
                       type={loginShowPassword ? 'text' : 'password'}
                       required
+                      autoComplete="new-password"
                       disabled={lockoutCountdown > 0}
                       value={loginInputPassword}
                       onChange={(e) => setLoginInputPassword(e.target.value)}
@@ -6399,55 +6355,6 @@
                   </a>
                 </div>
               </form>
-
-              {/* Quick Credential Selectors */}
-              <div className="pt-3 border-t border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-2 text-center tracking-wider">
-                  Select Portal to Sign In
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginInputUserId('arunjoyarumalil@gmail.com');
-                      setLoginInputPassword('password');
-                    }}
-                    className={`p-2 rounded-xl border text-left transition-all ${
-                      loginInputUserId === 'arunjoyarumalil@gmail.com'
-                        ? 'bg-indigo-950/70 border-indigo-500 shadow-sm'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-white flex items-center space-x-1">
-                      <span>👑</span>
-                      <span>Super Admin</span>
-                    </div>
-                    <div className="text-[9px] text-slate-400 font-mono truncate mt-0.5">
-                      arunjoyarumalil@gmail.com
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginInputUserId('bm.thodupuzha');
-                      setLoginInputPassword('password');
-                    }}
-                    className={`p-2 rounded-xl border text-left transition-all ${
-                      loginInputUserId === 'bm.thodupuzha' || loginInputUserId === 'axjoy1'
-                        ? 'bg-purple-950/70 border-purple-500 shadow-sm'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-white flex items-center space-x-1">
-                      <span>👔</span>
-                      <span>Branch Manager</span>
-                    </div>
-                    <div className="text-[9px] text-purple-300 font-mono truncate mt-0.5">
-                      bm.thodupuzha (THODUPUZHA)
-                    </div>
-                  </button>
-                </div>
-              </div>
 
               <div className="mt-6 pt-4 border-t border-slate-800/80 text-center space-y-1.5">
                 <div className="text-[10px] text-emerald-400 font-semibold flex items-center justify-center space-x-1">
