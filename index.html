@@ -17,7 +17,7 @@
   <meta http-equiv="Expires" content="0" />
 
   <!-- Local Offline CSS (Zero External CDN Dependency) -->
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 
   <!-- React 18 & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -17319,17 +17319,40 @@
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Employee / Agent Code</label>
-                      <input
-                        type="text"
-                        value={editMemberForm.code}
-                        onChange={(e) => setEditMemberForm({ ...editMemberForm, code: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                  {/* Agent Code & Code Start Date Section */}
+                  <div className="p-3 bg-amber-500/5 border border-amber-500/25 rounded-2xl space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Employee / Agent Code</label>
+                        <input
+                          type="text"
+                          value={editMemberForm.code}
+                          onChange={(e) => setEditMemberForm({ ...editMemberForm, code: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
 
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-400 mb-1 flex items-center space-x-1.5">
+                          <span>📅</span>
+                          <span>Code Start Date *</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={editMemberForm.joinedDate || '2025-01-01'}
+                          onChange={(e) => setEditMemberForm({ ...editMemberForm, joinedDate: e.target.value })}
+                          className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2 text-amber-200 font-mono text-xs font-bold focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-amber-300/80 flex items-center space-x-1">
+                      <span>⚡</span>
+                      <span>Code Start Date / Joining Date determines BDA activation tracking, monthly hurdles, and tenure.</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-300 mb-1">Mobile Phone Number</label>
                       <input
@@ -17339,9 +17362,7 @@
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-300 mb-1">Official Email Address</label>
                       <input
@@ -17351,33 +17372,16 @@
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Territory Hub / Operating City</label>
-                      <input
-                        type="text"
-                        value={editMemberForm.territory}
-                        onChange={(e) => setEditMemberForm({ ...editMemberForm, territory: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
                   </div>
 
-                  {/* Code Generated / Joining Date (Editable for all agents & staff) */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      Code Generated / Joining Date *
-                    </label>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Territory Hub / Operating City</label>
                     <input
-                      type="date"
-                      required
-                      value={editMemberForm.joinedDate || '2025-01-01'}
-                      onChange={(e) => setEditMemberForm({ ...editMemberForm, joinedDate: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                      type="text"
+                      value={editMemberForm.territory}
+                      onChange={(e) => setEditMemberForm({ ...editMemberForm, territory: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
                     />
-                    <span className="text-[10px] text-slate-400 mt-1 block">
-                      Agency code generation date (used for BDA activation cohorts, monthly hurdles, and tenure calculation).
-                    </span>
                   </div>
 
                   {memberToEdit.role === 'AGENT' && (
