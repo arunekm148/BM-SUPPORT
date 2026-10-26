@@ -411,6 +411,7 @@
         branchLocation: 'Commercial HQ',
         organization: 'Click to Connect Corporate',
         vertical: 'Commercial SaaS Landlord',
+        tenantId: 'tnt-tenant-01',
         reportsToId: null,
         reportsToName: 'Platform Owner',
         phone: '+91 98000 00001',
@@ -419,6 +420,26 @@
         mustChangePassword: false,
         salt: 'salt_adm_99',
         passwordHash: '45b80761ce6e2985e5af18ee685e35e1732c20fa39a8806440edf7d9ca25c356'
+      },
+      {
+        id: 'usr-admin-axjoy1',
+        userId: 'axjoy1',
+        name: 'Arun Joy',
+        employeeId: 'ADM-002',
+        role: 'SUPER_ADMIN',
+        roleLabel: '👑 Super Admin',
+        branchLocation: 'Kochi Metro Hub',
+        organization: 'Click to Connect Corporate',
+        vertical: 'Commercial SaaS Landlord',
+        tenantId: 'tnt-tenant-01',
+        reportsToId: null,
+        reportsToName: 'Platform Owner',
+        phone: '+91 98000 00001',
+        email: 'arunarumaliljoy@gmail.com',
+        status: 'Active',
+        mustChangePassword: false,
+        salt: 'salt_axjoy_01',
+        passwordHash: '34cdb5405a68d0557b0c400a3dc2eba42e34c07a75f4af84bc8d33fdb761bbf8'
       }
     ];
 
@@ -668,8 +689,13 @@
             if (u.id && (u.id.startsWith('usr-fls-') || u.id.startsWith('usr-tse-') || u.id.startsWith('usr-ag-') || u.id === 'usr-bm-01' || u.id === 'usr-bm-02')) return false;
             return true;
           });
-          const hasSuperAdmin = cleaned.some(u => u.role === 'SUPER_ADMIN' || (u.userId || '').toLowerCase() === 'arunarumaliljoy@gmail.com');
-          const finalUsers = hasSuperAdmin ? cleaned : [...INITIAL_USERS, ...cleaned];
+          let finalUsers = [...cleaned];
+          INITIAL_USERS.forEach(initUser => {
+            const exists = finalUsers.some(u => (u.userId || '').toLowerCase() === (initUser.userId || '').toLowerCase());
+            if (!exists) {
+              finalUsers.push(initUser);
+            }
+          });
           try { localStorage.setItem('bms_users_v5', JSON.stringify(finalUsers)); } catch(e) {}
           return finalUsers;
         } catch (e) {
@@ -834,7 +860,15 @@
       const [tenants, setTenants] = useState(() => {
         try {
           const saved = localStorage.getItem('bms_commercial_tenants_v1');
-          return saved ? JSON.parse(saved) : INITIAL_TENANTS;
+          const list = saved ? JSON.parse(saved) : INITIAL_TENANTS;
+          let finalTenants = Array.isArray(list) ? [...list] : [...INITIAL_TENANTS];
+          INITIAL_TENANTS.forEach(initTenant => {
+            const exists = finalTenants.some(t => t.id === initTenant.id);
+            if (!exists) {
+              finalTenants.push(initTenant);
+            }
+          });
+          return finalTenants;
         } catch (e) {
           return INITIAL_TENANTS;
         }
@@ -5069,9 +5103,9 @@
         setTimeout(() => {
           const trimmed = loginInputUserId.trim().toLowerCase();
           const target = users.find(u => 
-            u.userId.toLowerCase() === trimmed || 
+            (u.userId && u.userId.toLowerCase() === trimmed) || 
             (u.email && u.email.toLowerCase() === trimmed) ||
-            (u.role === 'SUPER_ADMIN' && (trimmed === 'superadmin' || trimmed === 'arunarumaliljoy@gmail.com'))
+            (u.role === 'SUPER_ADMIN' && (trimmed === 'superadmin' || trimmed === 'arunarumaliljoy@gmail.com' || trimmed === 'axjoy1'))
           );
 
           const recordLoginFailure = (errMsg, logDetail) => {
@@ -5093,7 +5127,7 @@
             return;
           }
 
-          const isSuperAdminPasswordMatch = (target.role === 'SUPER_ADMIN' && loginInputPassword === 'password');
+          const isSuperAdminPasswordMatch = ((target.role === 'SUPER_ADMIN' || (target.userId && target.userId.toLowerCase() === 'axjoy1')) && loginInputPassword === 'password');
           if (!isSuperAdminPasswordMatch && !verifyPassword(loginInputPassword, target.passwordHash, target.salt)) {
             recordLoginFailure('Invalid User ID or Password. Please check your credentials.', `Invalid password for @${target.userId}`);
             return;
@@ -5317,7 +5351,7 @@
           setForgotPasswordResult('Please enter your User ID or registered Email.');
           return;
         }
-        const target = users.find(u => u.userId.toLowerCase() === trimmed || (u.email && u.email.toLowerCase() === trimmed));
+        const target = users.find(u => (u.userId && u.userId.toLowerCase() === trimmed) || (u.email && u.email.toLowerCase() === trimmed));
         if (target) {
           logAuditEvent('PASSWORD_RESET_REQUESTED', target.userId, 'Reset requested by user');
           setForgotPasswordResult(`✓ Reset request logged for @${target.userId} (${target.name}). Your Branch Manager / Super Administrator has been notified to issue a temporary password.`);
@@ -5656,8 +5690,13 @@
             if (demoNames.includes(u.name)) return false;
             return true;
           });
-          const hasSuperAdmin = cleaned.some(u => u.role === 'SUPER_ADMIN' || (u.userId || '').toLowerCase() === 'arunarumaliljoy@gmail.com');
-          const finalUsers = hasSuperAdmin ? cleaned : [...INITIAL_USERS, ...cleaned];
+          let finalUsers = [...cleaned];
+          INITIAL_USERS.forEach(initUser => {
+            const exists = finalUsers.some(u => (u.userId || '').toLowerCase() === (initUser.userId || '').toLowerCase());
+            if (!exists) {
+              finalUsers.push(initUser);
+            }
+          });
           try { localStorage.setItem('bms_users_v5', JSON.stringify(finalUsers)); } catch(e) {}
           return finalUsers;
         });
