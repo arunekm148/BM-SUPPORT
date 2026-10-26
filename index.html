@@ -17,7 +17,7 @@
   <meta http-equiv="Expires" content="0" />
 
   <!-- Local Offline CSS (Zero External CDN Dependency) -->
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=9" />
 
   <!-- React 18 & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -1005,19 +1005,181 @@
       const [mbgaConfigForm, setMbgaConfigForm] = useState(mbgaConfig);
 
       // ========================================================
-      // INACTIVE AGENT CALL FOLLOW-UP STATE
+      // DIRECT TELECALLING, MOTIVATION & FOLLOW-UP COMMAND HUB
+      // Supports Calling: FLS Sales Managers, TSE Leaders & Agents
+      // Includes: Motivation Coaching, Next Remember Notes & Reminders
       // ========================================================
-      const [showAgentCallModal, setShowAgentCallModal] = useState(false);
-      const [selectedAgentForCall, setSelectedAgentForCall] = useState(null);
-      const [agentCallForm, setAgentCallForm] = useState({
-        callStatus: 'Connected - Follow-up Scheduled',
-        remarks: '',
-        nextCallbackDate: '2026-10-20'
+      const [showTelecallModal, setShowTelecallModal] = useState(false);
+      const [selectedPersonnelForTelecall, setSelectedPersonnelForTelecall] = useState(null);
+      const [telecallRoleFilter, setTelecallRoleFilter] = useState('ALL'); // 'ALL' | 'FLS' | 'TSE' | 'AGENT' | 'DUE' | 'HIGH' | 'CONTACTED' | 'NEVER'
+      const [telecallSearch, setTelecallSearch] = useState('');
+      const [telecallTerritoryFilter, setTelecallTerritoryFilter] = useState('ALL');
+      const [telecallForm, setTelecallForm] = useState({
+        callPurpose: 'Monthly Target & MBGA Motivation Push',
+        callStatus: 'Connected - Motivated & Committed to Target',
+        discussionNotes: '',
+        followupNeeded: true,
+        nextCallbackDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        nextRememberNote: '',
+        priority: 'HIGH'
       });
+      const [showCallHistoryModal, setShowCallHistoryModal] = useState(false);
+      const [historyPersonnel, setHistoryPersonnel] = useState(null);
+
+      // Backwards compatibility aliases for existing agent call triggers
+      const showAgentCallModal = showTelecallModal;
+      const setShowAgentCallModal = setShowTelecallModal;
+      const selectedAgentForCall = selectedPersonnelForTelecall;
+      const setSelectedAgentForCall = (ag) => handleOpenTelecallModal(ag);
+      const agentCallForm = telecallForm;
+      const setAgentCallForm = setTelecallForm;
 
       // Quick filter pill for Agent Activation Directory
       const [agentActiveFilterTab, setAgentActiveFilterTab] = useState('ALL');
       const [topPerfTab, setTopPerfTab] = useState('AGENTS'); // 'AGENTS' | 'FLS' | 'TSE'
+      // Telecalling handlers
+      const handleOpenTelecallModal = (person) => {
+        if (!person) return;
+        setSelectedPersonnelForTelecall(person);
+        const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setTelecallForm({
+          callPurpose: person.lastCallPurpose || 'Monthly Target & MBGA Motivation Push',
+          callStatus: 'Connected - Motivated & Committed to Target',
+          discussionNotes: '',
+          followupNeeded: true,
+          nextCallbackDate: person.nextCallbackDate || inTwoDays,
+          nextRememberNote: person.nextRememberNote || '',
+          priority: person.followupPriority || 'HIGH'
+        });
+        setShowTelecallModal(true);
+      };
+
+      const handleOpenCallHistoryModal = (person) => {
+        setHistoryPersonnel(person);
+        setShowCallHistoryModal(true);
+      };
+
+      const handleSaveTelecall = (e) => {
+        if (e) e.preventDefault();
+        if (!selectedPersonnelForTelecall) return;
+
+        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const callEntry = {
+          id: 'call-' + Date.now(),
+          timestamp: timestamp,
+          loggedBy: currentUser ? (currentUser.name || currentUser.userId) : 'Branch Manager',
+          callPurpose: telecallForm.callPurpose,
+          callStatus: telecallForm.callStatus,
+          discussionNotes: (telecallForm.discussionNotes || '').trim(),
+          followupNeeded: Boolean(telecallForm.followupNeeded),
+          nextCallbackDate: telecallForm.followupNeeded ? telecallForm.nextCallbackDate : null,
+          nextRememberNote: telecallForm.followupNeeded ? (telecallForm.nextRememberNote || '').trim() : '',
+          priority: telecallForm.priority
+        };
+
+        const updated = branchTeam.map(m => {
+          if (m.id === selectedPersonnelForTelecall.id) {
+            const hist = [callEntry, ...(m.telecallHistory || m.callHistory || [])];
+            return {
+              ...m,
+              lastCallDate: timestamp.split(' ')[0],
+              lastCallStatus: telecallForm.callStatus,
+              lastCallPurpose: telecallForm.callPurpose,
+              lastDiscussionNotes: (telecallForm.discussionNotes || '').trim(),
+              nextCallbackDate: telecallForm.followupNeeded ? telecallForm.nextCallbackDate : null,
+              nextRememberNote: telecallForm.followupNeeded ? (telecallForm.nextRememberNote || '').trim() : '',
+              followupPriority: telecallForm.followupNeeded ? telecallForm.priority : null,
+              telecallHistory: hist,
+              callHistory: hist
+            };
+          }
+          return m;
+        });
+
+        setBranchTeam(updated);
+        try {
+          localStorage.setItem('bms_branch_team_v3', JSON.stringify(updated));
+          localStorage.setItem('bms_branch_team_v2', JSON.stringify(updated));
+        } catch(err) {}
+
+        logAuditEvent('TELECALL_LOGGED', currentUser?.userId || 'bm', `Direct call to ${selectedPersonnelForTelecall.name} (${selectedPersonnelForTelecall.roleLabel || selectedPersonnelForTelecall.role}): ${telecallForm.callPurpose}`);
+        showToast(`✓ Call & Next Remember note saved for ${selectedPersonnelForTelecall.name}!`, 'success');
+        setShowTelecallModal(false);
+      };
+
+      // Telecalling reminders & follow-up metrics
+      const telecallMetrics = useMemo(() => {
+        const teamPool = (currentTenantTeam && currentTenantTeam.length > 0) ? currentTenantTeam : branchTeam;
+        const validMembers = teamPool.filter(m => m.status !== 'Deleted');
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        let dueCount = 0;
+        let highCount = 0;
+        let contactedThisMonthCount = 0;
+        let neverContactedCount = 0;
+
+        validMembers.forEach(m => {
+          if (m.nextCallbackDate && m.nextCallbackDate <= todayStr) {
+            dueCount++;
+          }
+          if (m.followupPriority === 'HIGH' && m.nextCallbackDate) {
+            highCount++;
+          }
+          if (m.lastCallDate && m.lastCallDate.startsWith('2026-10')) {
+            contactedThisMonthCount++;
+          }
+          if (!m.lastCallDate && (!m.telecallHistory || m.telecallHistory.length === 0)) {
+            neverContactedCount++;
+          }
+        });
+
+        return {
+          total: validMembers.length,
+          dueCount,
+          highCount,
+          contactedThisMonthCount,
+          neverContactedCount
+        };
+      }, [currentTenantTeam, branchTeam]);
+
+      // Telecall filtered roster list
+      const telecallFilteredList = useMemo(() => {
+        const teamPool = (currentTenantTeam && currentTenantTeam.length > 0) ? currentTenantTeam : branchTeam;
+        const validMembers = teamPool.filter(m => m.status !== 'Deleted');
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        return validMembers.filter(m => {
+          // Role filter
+          if (telecallRoleFilter === 'FLS' && m.role !== 'SALES_MANAGER') return false;
+          if (telecallRoleFilter === 'TSE' && m.role !== 'TSE') return false;
+          if (telecallRoleFilter === 'AGENT' && m.role !== 'AGENT') return false;
+          if (telecallRoleFilter === 'DUE' && (!m.nextCallbackDate || m.nextCallbackDate > todayStr)) return false;
+          if (telecallRoleFilter === 'HIGH' && (m.followupPriority !== 'HIGH' || !m.nextCallbackDate)) return false;
+          if (telecallRoleFilter === 'CONTACTED' && !m.lastCallDate) return false;
+          if (telecallRoleFilter === 'NEVER' && (m.lastCallDate || (m.telecallHistory && m.telecallHistory.length > 0))) return false;
+
+          // Territory filter
+          if (telecallTerritoryFilter !== 'ALL' && m.territory !== telecallTerritoryFilter) return false;
+
+          // Search
+          if (telecallSearch.trim()) {
+            const q = telecallSearch.toLowerCase().trim();
+            const matchName = (m.name || '').toLowerCase().includes(q);
+            const matchCode = (m.code || '').toLowerCase().includes(q);
+            const matchPhone = (m.phone || '').toLowerCase().includes(q);
+            const matchTerritory = (m.territory || '').toLowerCase().includes(q);
+            const matchManager = (m.reportsToName || '').toLowerCase().includes(q);
+            const matchNote = (m.nextRememberNote || '').toLowerCase().includes(q);
+            const matchDisc = (m.lastDiscussionNotes || '').toLowerCase().includes(q);
+            if (!matchName && !matchCode && !matchPhone && !matchTerritory && !matchManager && !matchNote && !matchDisc) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+      }, [currentTenantTeam, branchTeam, telecallRoleFilter, telecallTerritoryFilter, telecallSearch]);
+
 
       // ========================================================
       // CENTRALIZED RENEWAL MODULE STATE & REST API INTEGRATION
@@ -6734,6 +6896,28 @@
                       )}
                     </button>
 
+                    {/* 4c. Direct Telecalling & Motivation Hub (FLS, TSE & Agents) */}
+                    <button
+                      onClick={() => {
+                        setTelecallRoleFilter('ALL');
+                        setActiveTab('tenant_telecalling');
+                      }}
+                      className={`sidebar-nav-btn ${activeTab === 'tenant_telecalling' ? 'active' : ''}`}
+                      title="Direct Telecalling, Motivation Coaching & Follow-up Reminders for FLS, TSE & Agents"
+                    >
+                      <span className="text-sm mr-2">📞</span>
+                      {!isSidebarCollapsed && <span className="flex-1 truncate">Direct Telecalling</span>}
+                      {!isSidebarCollapsed && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                          telecallMetrics.dueCount > 0
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
+                            : 'bg-emerald-500/20 text-emerald-300'
+                        }`}>
+                          {telecallMetrics.dueCount > 0 ? `⏰ ${telecallMetrics.dueCount}` : 'Call'}
+                        </span>
+                      )}
+                    </button>
+
                     {/* 5. Renewals */}
                     <button
                       onClick={() => {
@@ -9281,6 +9465,14 @@
                                   <td className="p-3 text-right">
                                     <div className="flex items-center justify-end space-x-1.5 whitespace-nowrap">
                                       <button
+                                        onClick={() => handleOpenTelecallModal(tse)}
+                                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition-colors flex items-center space-x-1"
+                                        title="Direct telecall, motivate leader & log follow-up notes"
+                                      >
+                                        <span>📞</span>
+                                        <span>Call</span>
+                                      </button>
+                                      <button
                                         onClick={() => handleOpenEditMemberModal(tse)}
                                         className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center space-x-1"
                                         title="Edit manager details"
@@ -9408,6 +9600,14 @@
                                   </td>
                                   <td className="p-3 text-right">
                                     <div className="flex items-center justify-end space-x-1.5 whitespace-nowrap">
+                                      <button
+                                        onClick={() => handleOpenTelecallModal(sm)}
+                                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition-colors flex items-center space-x-1"
+                                        title="Direct telecall, motivate sales manager & log follow-up notes"
+                                      >
+                                        <span>📞</span>
+                                        <span>Call</span>
+                                      </button>
                                       <button
                                         onClick={() => handleOpenEditMemberModal(sm)}
                                         className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center space-x-1"
@@ -12121,6 +12321,402 @@
                                     <span>📞</span>
                                     <span>Call</span>
                                   </a>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================== */}
+            {/* VIEW: 📞 DIRECT TELECALLING & MOTIVATION COACHING HUB */}
+            {/* Universal calling for FLS Managers, TSE Leaders & Agents*/}
+            {/* ====================================================== */}
+            {activeTab === 'tenant_telecalling' && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/40 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                    <div>
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="p-3 rounded-2xl bg-emerald-500/20 text-emerald-400 text-2xl border border-emerald-500/30 shadow-inner">📞</span>
+                        <div>
+                          <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                            Direct Telecalling & Follow-up Hub
+                            <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
+                              Branch Manager Console
+                            </span>
+                          </h2>
+                          <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                            Call all team members directly (FLS Sales Managers, TSE Leaders, and Agents) to boost morale, drive monthly targets, and track commitments. Store dedicated <strong className="text-amber-300">"Next Remember"</strong> comments so you never forget follow-up discussion points!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/60 text-right">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Total Roster</span>
+                        <span className="text-lg font-black text-white font-mono">{telecallMetrics.total} Personnel</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Metric Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div 
+                    onClick={() => setTelecallRoleFilter('DUE')}
+                    className={`cursor-pointer transition-all p-4 rounded-xl border ${
+                      telecallRoleFilter === 'DUE' 
+                        ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/30' 
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400">⏰ Follow-up Due Today</span>
+                      <span className={`w-2.5 h-2.5 rounded-full ${telecallMetrics.dueCount > 0 ? 'bg-rose-500 animate-ping' : 'bg-slate-600'}`}></span>
+                    </div>
+                    <div className="text-2xl font-black text-rose-400 mt-2 font-mono">{telecallMetrics.dueCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-1">Requires immediate follow-up call</p>
+                  </div>
+
+                  <div 
+                    onClick={() => setTelecallRoleFilter('HIGH')}
+                    className={`cursor-pointer transition-all p-4 rounded-xl border ${
+                      telecallRoleFilter === 'HIGH' 
+                        ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30' 
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400">🔥 High Priority Reminders</span>
+                      <span className="text-amber-400 text-xs">🔥</span>
+                    </div>
+                    <div className="text-2xl font-black text-amber-400 mt-2 font-mono">{telecallMetrics.highCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-1">Hot deals & critical coaching</p>
+                  </div>
+
+                  <div 
+                    onClick={() => setTelecallRoleFilter('CONTACTED')}
+                    className={`cursor-pointer transition-all p-4 rounded-xl border ${
+                      telecallRoleFilter === 'CONTACTED' 
+                        ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/30' 
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400">📞 Contacted (Oct 2026)</span>
+                      <span className="text-emerald-400 text-xs">✓</span>
+                    </div>
+                    <div className="text-2xl font-black text-emerald-400 mt-2 font-mono">{telecallMetrics.contactedThisMonthCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-1">Personnel spoken to this month</p>
+                  </div>
+
+                  <div 
+                    onClick={() => setTelecallRoleFilter('NEVER')}
+                    className={`cursor-pointer transition-all p-4 rounded-xl border ${
+                      telecallRoleFilter === 'NEVER' 
+                        ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30' 
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400">⚪ Never Contacted</span>
+                      <span className="text-slate-400 text-xs">⏳</span>
+                    </div>
+                    <div className="text-2xl font-black text-indigo-300 mt-2 font-mono">{telecallMetrics.neverContactedCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-1">Needs first connection call</p>
+                  </div>
+                </div>
+
+                {/* Filters & Search Control Bar */}
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/* Role Filter Pills */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { id: 'ALL', label: `All Personnel (${telecallMetrics.total})`, icon: '👥' },
+                        { id: 'FLS', label: `FLS Managers (12)`, icon: '👔' },
+                        { id: 'TSE', label: `TSE Leaders (22)`, icon: '🎯' },
+                        { id: 'AGENT', label: `Agents (315)`, icon: '💼' },
+                        { id: 'DUE', label: `⏰ Due Follow-up (${telecallMetrics.dueCount})`, icon: '⏰' },
+                        { id: 'HIGH', label: `🔥 High Priority (${telecallMetrics.highCount})`, icon: '🔥' },
+                        { id: 'NEVER', label: `⚪ Never Called (${telecallMetrics.neverContactedCount})`, icon: '⚪' },
+                      ].map((pill) => (
+                        <button
+                          key={pill.id}
+                          onClick={() => setTelecallRoleFilter(pill.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                            telecallRoleFilter === pill.id
+                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 scale-105'
+                              : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <span>{pill.icon}</span>
+                          <span>{pill.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Territory Filter & Quick Reset */}
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={telecallTerritoryFilter}
+                        onChange={(e) => setTelecallTerritoryFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-700 text-white text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 font-bold"
+                      >
+                        <option value="ALL">📍 All Territories</option>
+                        {Array.from(new Set(branchTeam.map(m => m.territory).filter(Boolean))).sort().map(t => (
+                          <option key={t} value={t}>📍 {t}</option>
+                        ))}
+                      </select>
+
+                      {(telecallRoleFilter !== 'ALL' || telecallTerritoryFilter !== 'ALL' || telecallSearch) && (
+                        <button
+                          onClick={() => {
+                            setTelecallRoleFilter('ALL');
+                            setTelecallTerritoryFilter('ALL');
+                            setTelecallSearch('');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all"
+                          title="Reset All Filters"
+                        >
+                          ✕ Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Search Input Box */}
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                    <input
+                      type="text"
+                      value={telecallSearch}
+                      onChange={(e) => setTelecallSearch(e.target.value)}
+                      placeholder="Search roster by Name, Agent/Emp Code, Mobile Number, Territory, Reporting Leader, or text inside 'Next Remember' notes..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inner"
+                    />
+                    {telecallSearch && (
+                      <button
+                        onClick={() => setTelecallSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Personnel Calling Roster Table */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                  <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-black text-white text-sm">Personnel Directory & Calling Log</span>
+                      <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-mono font-bold">
+                        Showing {telecallFilteredList.length} of {telecallMetrics.total}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">
+                      💡 Click <strong>📞 Direct Dial</strong> to call instantly or <strong>Log Call</strong> to update Next Remember notes.
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-950/60 border-b border-slate-800 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+                          <th className="py-3 px-4">Role & Personnel</th>
+                          <th className="py-3 px-3">Contact & Direct Dial</th>
+                          <th className="py-3 px-3">Territory & Hierarchy</th>
+                          <th className="py-3 px-3">Last Motivation Call</th>
+                          <th className="py-3 px-4">Next Remember & Follow-up</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                        {telecallFilteredList.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-slate-400">
+                              <span className="text-3xl block mb-2">🔍</span>
+                              <p className="font-bold text-sm text-slate-300">No personnel match your current filter or search</p>
+                              <p className="text-xs text-slate-500 mt-1">Try clearing your search term or switching role filter.</p>
+                              <button
+                                onClick={() => {
+                                  setTelecallRoleFilter('ALL');
+                                  setTelecallTerritoryFilter('ALL');
+                                  setTelecallSearch('');
+                                }}
+                                className="mt-3 px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                              >
+                                Clear All Filters
+                              </button>
+                            </td>
+                          </tr>
+                        ) : (
+                          telecallFilteredList.map((person) => {
+                            const isFLS = person.role === 'SALES_MANAGER';
+                            const isTSE = person.role === 'TSE';
+                            const isAgent = person.role === 'AGENT';
+                            const roleBadge = isFLS 
+                              ? { bg: 'bg-purple-500/20 text-purple-300 border-purple-500/40', label: 'FLS Manager' }
+                              : isTSE 
+                              ? { bg: 'bg-amber-500/20 text-amber-300 border-amber-500/40', label: 'TSE Leader' }
+                              : { bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', label: 'Advisor Agent' };
+
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            const isDue = person.nextCallbackDate && person.nextCallbackDate <= todayStr;
+                            const isHigh = person.followupPriority === 'HIGH';
+                            const callCount = (person.telecallHistory || person.callHistory || []).length;
+
+                            return (
+                              <tr key={person.id} className="hover:bg-slate-800/40 transition-colors">
+                                {/* Role & Personnel */}
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center space-x-2.5">
+                                    <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-300 flex-shrink-0">
+                                      {person.name ? person.name.charAt(0).toUpperCase() : '?'}
+                                    </div>
+                                    <div>
+                                      <div className="font-bold text-white text-xs flex items-center space-x-1.5">
+                                        <span>{person.name}</span>
+                                        {isDue && (
+                                          <span className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1 py-0.2 rounded font-mono font-bold animate-pulse">
+                                            DUE
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center space-x-1.5 mt-0.5">
+                                        <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${roleBadge.bg}`}>
+                                          {roleBadge.label}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">
+                                          {person.code || person.id}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Contact & Direct Dial */}
+                                <td className="py-3 px-3">
+                                  <div>
+                                    <div className="font-mono text-slate-300 text-xs">
+                                      {person.phone || 'No Phone'}
+                                    </div>
+                                    {person.phone ? (
+                                      <a
+                                        href={`tel:${person.phone}`}
+                                        className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded mt-0.5 transition-all"
+                                      >
+                                        <span>📞</span>
+                                        <span>Direct Dial</span>
+                                      </a>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500">No dial available</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Territory & Hierarchy */}
+                                <td className="py-3 px-3">
+                                  <div className="text-xs">
+                                    <span className="text-slate-300 font-semibold block">📍 {person.territory || 'Thodupuzha'}</span>
+                                    {person.reportsToName && (
+                                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                                        Sup: {person.reportsToName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Last Motivation Call */}
+                                <td className="py-3 px-3">
+                                  {person.lastCallDate ? (
+                                    <div className="space-y-0.5">
+                                      <div className="text-[11px] font-bold text-slate-200">
+                                        {person.lastCallDate}
+                                      </div>
+                                      {person.lastCallPurpose && (
+                                        <div className="text-[10px] text-indigo-300 truncate max-w-[160px]" title={person.lastCallPurpose}>
+                                          {person.lastCallPurpose}
+                                        </div>
+                                      )}
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono inline-block">
+                                        {person.lastCallStatus || 'Connected'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-500 italic">Never called</span>
+                                  )}
+                                </td>
+
+                                {/* Next Remember & Follow-up */}
+                                <td className="py-3 px-4">
+                                  {person.nextRememberNote ? (
+                                    <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1 max-w-sm">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider flex items-center space-x-1">
+                                          <span>📝 Next Remember:</span>
+                                        </span>
+                                        {person.nextCallbackDate && (
+                                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                                            isDue 
+                                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                                              : 'bg-slate-800 text-slate-300'
+                                          }`}>
+                                            📅 {person.nextCallbackDate}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-amber-200 leading-snug line-clamp-2" title={person.nextRememberNote}>
+                                        "{person.nextRememberNote}"
+                                      </p>
+                                    </div>
+                                  ) : person.nextCallbackDate ? (
+                                    <div className="text-xs">
+                                      <span className="text-[10px] text-slate-400 block">Follow-up Scheduled:</span>
+                                      <span className={`font-mono text-xs font-bold ${isDue ? 'text-rose-400' : 'text-slate-200'}`}>
+                                        📅 {person.nextCallbackDate}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-500 italic">No reminder set</span>
+                                  )}
+                                </td>
+
+                                {/* Actions */}
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end space-x-1.5">
+                                    <button
+                                      onClick={() => handleOpenTelecallModal(person)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1 shadow-sm transition-all"
+                                      title="Open Telecall & Motivation Coaching Log"
+                                    >
+                                      <span>📞</span>
+                                      <span>Call & Log</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenCallHistoryModal(person)}
+                                      className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all flex items-center space-x-1"
+                                      title="View Past Call History & Next Remember Logs"
+                                    >
+                                      <span>📜</span>
+                                      {callCount > 0 && (
+                                        <span className="text-[10px] font-mono bg-indigo-500/30 text-indigo-300 px-1 rounded">
+                                          {callCount}
+                                        </span>
+                                      )}
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -17156,138 +17752,218 @@
           )}
 
           {/* ====================================================== */}
-          {/* MODAL: 📞 AGENT CALL ACTION & FOLLOW-UP LOG MODAL       */}
+          {/* MODAL: 📞 DIRECT TELECALLING, MOTIVATION & NEXT REMEMBER */}
+          {/* Universal Calling for: FLS Managers, TSE Leaders & Agents */}
           {/* ====================================================== */}
-          {showAgentCallModal && selectedAgentForCall && (
+          {showTelecallModal && selectedPersonnelForTelecall && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn max-h-[92vh] overflow-y-auto space-y-4">
+                
+                {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <div className="flex items-center space-x-3">
                     <span className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-lg border border-emerald-500/30">📞</span>
                     <div>
-                      <h3 className="font-black text-white text-base">Record Advisor Call Follow-up</h3>
+                      <h3 className="font-black text-white text-base">Direct Telecall & Motivation Coaching</h3>
                       <p className="text-[11px] text-slate-400">
-                        {selectedAgentForCall.name} ({selectedAgentForCall.code}) • {selectedAgentForCall.phone}
+                        {selectedPersonnelForTelecall.name} • {selectedPersonnelForTelecall.roleLabel || selectedPersonnelForTelecall.role} ({selectedPersonnelForTelecall.code})
                       </p>
                     </div>
                   </div>
-                  <button onClick={() => setShowAgentCallModal(false)} className="text-slate-400 hover:text-white text-base">✕</button>
+                  <button onClick={() => setShowTelecallModal(false)} className="text-slate-400 hover:text-white text-base">✕</button>
                 </div>
 
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Reporting Manager:</span>
-                    <strong className="text-white">{selectedAgentForCall.reportsToName || 'Direct to BM'}</strong>
+                {/* Direct Dialing & Personnel Card */}
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">Contact Number:</span>
+                      <strong className="text-white text-sm font-mono">{selectedPersonnelForTelecall.phone || 'No Phone Added'}</strong>
+                    </div>
+                    {selectedPersonnelForTelecall.phone && (
+                      <a
+                        href={`tel:${selectedPersonnelForTelecall.phone}`}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-emerald-600/30 transition-all"
+                      >
+                        <span>📞</span>
+                        <span>Tap to Dial Now</span>
+                      </a>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Inactivity Duration:</span>
-                    <span className="text-rose-400 font-bold">{getAgentActivationMetrics(selectedAgentForCall, policies, mbgaConfig).inactivityDurationText}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-slate-800/60 mt-1">
-                    <span className="text-slate-400">Direct Dial:</span>
-                    <a href={`tel:${selectedAgentForCall.phone}`} className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold flex items-center space-x-1">
-                      <span>📞 Dial Now</span>
-                    </a>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px]">
+                    <div>
+                      <span className="text-slate-400">Territory Hub:</span>
+                      <strong className="text-slate-200 block truncate">{selectedPersonnelForTelecall.territory || 'Thodupuzha'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Reporting Line:</span>
+                      <strong className="text-slate-200 block truncate">{selectedPersonnelForTelecall.reportsToName || 'Direct to BM'}</strong>
+                    </div>
                   </div>
                 </div>
 
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const callLogEntry = {
-                      id: 'call-' + Date.now(),
-                      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-                      callStatus: agentCallForm.callStatus,
-                      remarks: agentCallForm.remarks,
-                      nextCallbackDate: agentCallForm.nextCallbackDate,
-                      loggedBy: currentUser ? currentUser.name : 'Branch Manager'
-                    };
+                {/* PREVIOUS REMEMBER BANNER (If existed from previous call) */}
+                {selectedPersonnelForTelecall.nextRememberNote && (
+                  <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl space-y-1">
+                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-xs">
+                      <span>⚠️</span>
+                      <span>PREVIOUS "NEXT REMEMBER" NOTE FOR THIS CALL:</span>
+                    </div>
+                    <p className="text-amber-200 text-xs font-sans pl-5 leading-relaxed">
+                      "{selectedPersonnelForTelecall.nextRememberNote}"
+                    </p>
+                    {selectedPersonnelForTelecall.nextCallbackDate && (
+                      <span className="text-[10px] text-amber-400/80 font-mono block pl-5">
+                        Scheduled callback was: {selectedPersonnelForTelecall.nextCallbackDate}
+                      </span>
+                    )}
+                  </div>
+                )}
 
-                    setBranchTeam(prev => prev.map(m => {
-                      if (m.id === selectedAgentForCall.id) {
-                        return {
-                          ...m,
-                          lastCallStatus: agentCallForm.callStatus,
-                          nextCallbackDate: agentCallForm.nextCallbackDate,
-                          callHistory: [callLogEntry, ...(m.callHistory || [])]
-                        };
-                      }
-                      return m;
-                    }));
-
-                    fetch('http://localhost:5000/api/hierarchy/log-agent-call', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        agentId: selectedAgentForCall.id,
-                        agentName: selectedAgentForCall.name,
-                        callStatus: agentCallForm.callStatus,
-                        remarks: agentCallForm.remarks,
-                        nextCallbackDate: agentCallForm.nextCallbackDate,
-                        loggedBy: currentUser ? currentUser.name : 'Branch Manager'
-                      })
-                    }).catch(() => {});
-
-                    logAuditEvent('AGENT_CALL_FOLLOWUP', currentUser?.userId, `Logged call follow-up for agent ${selectedAgentForCall.name} (${selectedAgentForCall.code}): ${agentCallForm.callStatus}`);
-                    showToast(`Call follow-up logged for ${selectedAgentForCall.name}`);
-                    setShowAgentCallModal(false);
-                  }}
-                  className="space-y-3.5"
-                >
+                {/* Form */}
+                <form onSubmit={handleSaveTelecall} className="space-y-3.5">
+                  
+                  {/* 1. Motivation Coaching & Call Purpose */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Call Status *</label>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      1. Motivation Coaching & Call Purpose *
+                    </label>
                     <select
                       required
-                      value={agentCallForm.callStatus}
-                      onChange={(e) => setAgentCallForm({ ...agentCallForm, callStatus: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold text-xs"
+                      value={telecallForm.callPurpose}
+                      onChange={(e) => setTelecallForm({ ...telecallForm, callPurpose: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="Connected - Follow-up Scheduled">📞 Connected - Follow-up Scheduled</option>
-                      <option value="Interested - Pipeline Active">💡 Interested - Pipeline Active</option>
-                      <option value="Quotation / Proposal Requested">📑 Quotation / Proposal Requested</option>
-                      <option value="Call Back Requested">⏳ Call Back Requested</option>
-                      <option value="Not Reachable / Busy">📵 Not Reachable / Busy</option>
-                      <option value="Meeting Fixed with FLS / BM">🤝 Meeting Fixed with FLS / BM</option>
-                      <option value="Not Interested / Dormant">⚪ Not Interested / Dormant</option>
+                      <option value="Monthly Target & MBGA Motivation Push">🎯 Monthly Target & MBGA Motivation Push</option>
+                      <option value="Contest & Club Qualification Drive">🏆 Contest & Club Qualification Drive</option>
+                      <option value="High-Value Proposal & Pipeline Check">💼 High-Value Proposal & Pipeline Check</option>
+                      <option value="First Case Activation & Code Login">⚡ First Case Activation & Code Login</option>
+                      <option value="Recruitment & Team Growth Mentoring">🤝 Recruitment & Team Growth Mentoring</option>
+                      <option value="Weekly Performance Review & Guidance">📈 Weekly Performance Review & Guidance</option>
+                      <option value="Appreciation, Morale Boost & Recognition">🌟 Appreciation, Morale Boost & Recognition</option>
+                      <option value="Routine Operational Check-in">📌 Routine Operational Check-in</option>
                     </select>
                   </div>
 
+                  {/* 2. Call Status / Outcome */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Next Callback / Action Date</label>
-                    <input
-                      type="date"
-                      value={agentCallForm.nextCallbackDate}
-                      onChange={(e) => setAgentCallForm({ ...agentCallForm, nextCallbackDate: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs"
-                    />
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      2. Call Outcome / Status *
+                    </label>
+                    <select
+                      required
+                      value={telecallForm.callStatus}
+                      onChange={(e) => setTelecallForm({ ...telecallForm, callStatus: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="Connected - Motivated & Committed to Target">📞 Connected - Motivated & Committed to Target</option>
+                      <option value="Connected - Meeting / Follow-up Action Scheduled">🤝 Connected - Meeting / Follow-up Action Scheduled</option>
+                      <option value="Connected - Client Proposal in Progress">💡 Connected - Client Proposal in Progress</option>
+                      <option value="Call Back Requested / In Meeting">⏳ Call Back Requested / In Meeting</option>
+                      <option value="Ringing / No Answer">📵 Ringing / No Answer</option>
+                      <option value="Switched Off / Unreachable">📴 Switched Off / Unreachable</option>
+                      <option value="Grievance / Obstacle Reported">🚨 Grievance / Obstacle Reported</option>
+                    </select>
                   </div>
 
+                  {/* 3. Discussion Remarks */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Follow-up Remarks *</label>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      3. Call Discussion Remarks (What was discussed & commitments made) *
+                    </label>
                     <textarea
                       required
                       rows={3}
-                      value={agentCallForm.remarks}
-                      onChange={(e) => setAgentCallForm({ ...agentCallForm, remarks: e.target.value })}
-                      placeholder="Enter discussion notes, commitments, customer pipeline, obstacles..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs"
+                      value={telecallForm.discussionNotes}
+                      onChange={(e) => setTelecallForm({ ...telecallForm, discussionNotes: e.target.value })}
+                      placeholder="Enter discussion notes, specific commitments, client names in pipeline, obstacles identified, or motivation topics covered..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
                     ></textarea>
                   </div>
 
+                  {/* 4. Follow-up Needed & Next Remember Section */}
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={telecallForm.followupNeeded}
+                          onChange={(e) => setTelecallForm({ ...telecallForm, followupNeeded: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-slate-900 border-slate-700"
+                        />
+                        <span className="font-bold text-xs text-white">4. Schedule Next Follow-up / Reminder</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-400 font-semibold">
+                        {telecallForm.followupNeeded ? '✓ Active Reminder' : 'No Follow-up'}
+                      </span>
+                    </div>
+
+                    {telecallForm.followupNeeded && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Next Follow-up Date *</label>
+                            <input
+                              type="date"
+                              required
+                              value={telecallForm.nextCallbackDate}
+                              onChange={(e) => setTelecallForm({ ...telecallForm, nextCallbackDate: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Follow-up Priority</label>
+                            <select
+                              value={telecallForm.priority}
+                              onChange={(e) => setTelecallForm({ ...telecallForm, priority: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-emerald-500"
+                            >
+                              <option value="HIGH">🔥 High Priority (Hot Target)</option>
+                              <option value="MEDIUM">⚡ Standard Check-in</option>
+                              <option value="NORMAL">⏳ Routine Review</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* COMMENT BOX FOR NEXT REMEMBER */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-400 mb-1 flex items-center space-x-1">
+                            <span>📝</span>
+                            <span>Comment Box for Next Remember (Crucial reminder for your next call) *</span>
+                          </label>
+                          <textarea
+                            required
+                            rows={2}
+                            value={telecallForm.nextRememberNote}
+                            onChange={(e) => setTelecallForm({ ...telecallForm, nextRememberNote: e.target.value })}
+                            placeholder="e.g., Ask about client Ramesh in Muvattupuzha; verify if 2 health insurance proposals were submitted; check if TSE Bobby assisted them..."
+                            className="w-full bg-slate-900 border border-amber-500/40 rounded-xl p-2.5 text-amber-200 text-xs font-sans placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                          ></textarea>
+                          <span className="text-[10px] text-slate-400 mt-0.5 block">
+                            💡 This note will be prominently highlighted the next time you call this person.
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Actions */}
                   <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-2">
                     <button
                       type="button"
-                      onClick={() => setShowAgentCallModal(false)}
-                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                      onClick={() => setShowTelecallModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md flex items-center space-x-1"
+                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-md shadow-emerald-600/30 flex items-center space-x-1.5"
                     >
                       <span>💾</span>
-                      <span>Save Call Follow-up</span>
+                      <span>Save Call & Follow-up</span>
                     </button>
                   </div>
                 </form>
@@ -17295,6 +17971,84 @@
             </div>
           )}
 
+          {/* ====================================================== */}
+          {/* MODAL: 📜 COMPLETE CALL & MOTIVATION HISTORY TIMELINE  */}
+          {/* ====================================================== */}
+          {showCallHistoryModal && historyPersonnel && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn max-h-[88vh] overflow-y-auto space-y-4">
+                
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-3">
+                    <span className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 text-lg border border-indigo-500/30">📜</span>
+                    <div>
+                      <h3 className="font-black text-white text-base">Telecalling & Follow-up History</h3>
+                      <p className="text-[11px] text-slate-400">
+                        {historyPersonnel.name} ({historyPersonnel.code}) • {historyPersonnel.roleLabel || historyPersonnel.role}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowCallHistoryModal(false)} className="text-slate-400 hover:text-white text-base">✕</button>
+                </div>
+
+                <div className="space-y-3">
+                  {(historyPersonnel.telecallHistory || historyPersonnel.callHistory || []).length === 0 ? (
+                    <div className="p-8 text-center text-slate-400">
+                      No previous telecall logs recorded for this person yet.
+                    </div>
+                  ) : (
+                    (historyPersonnel.telecallHistory || historyPersonnel.callHistory || []).map((entry, idx) => (
+                      <div key={entry.id || idx} className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white text-xs">{entry.timestamp}</span>
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                            {entry.callStatus}
+                          </span>
+                        </div>
+
+                        {entry.callPurpose && (
+                          <div className="text-[11px] font-bold text-indigo-300 flex items-center space-x-1">
+                            <span>🎯 Purpose:</span>
+                            <span>{entry.callPurpose}</span>
+                          </div>
+                        )}
+
+                        {entry.discussionNotes && (
+                          <p className="text-slate-300 text-xs bg-slate-900/60 p-2 rounded-lg border border-slate-800/80">
+                            {entry.discussionNotes}
+                          </p>
+                        )}
+
+                        {entry.nextRememberNote && (
+                          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-200 text-[11px]">
+                            <span className="font-bold text-amber-400 text-[10px] uppercase block">📝 Next Remember Comment:</span>
+                            {entry.nextRememberNote}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-800/50">
+                          <span>Logged by: {entry.loggedBy || 'Branch Manager'}</span>
+                          {entry.nextCallbackDate && (
+                            <span className="font-mono text-indigo-300">Next Action: {entry.nextCallbackDate}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-800 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCallHistoryModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* MODAL 1: ✏️ EDIT MEMBER / PERSONNEL DETAILS             */}
           {/* ====================================================== */}
