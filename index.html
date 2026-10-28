@@ -5852,7 +5852,7 @@
 
       // ========================================================
       // AGENT EXCEL UPLOAD, ENROLLMENT & RECONCILIATION STATE
-      // Supports parsing: Agent Name, Code, Date of Joining, Current Club
+      // Supports parsing: Agent Name, Code, Agent Code Generated Date, Current Club, Current Premium
       // Features: Approval Check (Tick), Live Match & Edit, Merge New & Existing
       // ========================================================
       const [showAgentExcelImportModal, setShowAgentExcelImportModal] = useState(false);
@@ -5871,7 +5871,6 @@
       const [agentLiveMatchRow, setAgentLiveMatchRow] = useState(null);
       const [showAgentLiveMatchModal, setShowAgentLiveMatchModal] = useState(false);
 
-      // Filtered Tenants
       const filteredTenants = useMemo(() => {
         if (!tenantSearch.trim()) return tenants;
         const q = tenantSearch.toLowerCase();
@@ -6716,7 +6715,6 @@
         })));
         showToast(`⚡ Set Code Generated Date to ${bulkJoiningDate} for all ${agentImportStagingRows.length} rows!`, 'success');
       };
-
       // Robust Date Normalization Utility for Excel / CSV Inputs
       const normalizeAgentJoiningDate = (raw) => {
         if (!raw) return '2025-01-01';
@@ -6726,47 +6724,69 @@
         const str = String(raw).trim();
         if (!str) return '2025-01-01';
         // Excel serial date number (e.g. 45658)
-        if (/^\d{5}$/.test(str)) {
+        if (/^[0-9]{5}$/.test(str)) {
           const serial = parseInt(str, 10);
           const d = new Date(Math.round((serial - 25569) * 86400 * 1000));
           if (!isNaN(d.getTime())) {
             return d.toISOString().split('T')[0];
           }
         }
-        // YYYY-MM-DD
-        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-          return str.substring(0, 10);
-        }
         // DD/MM/YYYY or DD-MM-YYYY
-        const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        const dmy = str.match(/^([0-3]?[0-9])[\/\-.]([0-1]?[0-9])[\/\-.]([1-2][0-9]{3})/);
         if (dmy) {
           const d = dmy[1].padStart(2, '0');
           const m = dmy[2].padStart(2, '0');
           const y = dmy[3];
           return `${y}-${m}-${d}`;
         }
-        // General parse fallback
-        const parsed = Date.parse(str);
-        if (!isNaN(parsed)) {
-          return new Date(parsed).toISOString().split('T')[0];
+        // YYYY-MM-DD
+        if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(str)) {
+          return str.substring(0, 10);
         }
-        return str || '2025-01-01';
+        const parsed = new Date(str);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString().split('T')[0];
+        }
+        return '2025-01-01';
       };
 
       // Robust Club Tier Normalization Utility
       const normalizeAgentClubTier = (raw, existingClub) => {
         if (!raw && existingClub) return existingClub;
-        if (!raw) return 'Associate (15%)';
-        const str = String(raw).trim();
+        const str = String(raw || '').trim();
+        if (!str) return existingClub || 'Associate (15%)';
         const lower = str.toLowerCase();
         if (lower.includes('diamond')) return 'Diamond Club (25%)';
         if (lower.includes('gold')) return 'Gold Club (20%)';
         if (lower.includes('silver')) return 'Silver Club (18%)';
         if (lower.includes('chairman')) return 'Chairman Club (30%)';
         if (lower.includes('ceo')) return 'CEO Club (28%)';
-        if (lower.includes('corporate') || lower.includes('elite')) return 'Corporate Elite';
         if (lower.includes('associate')) return 'Associate (15%)';
+        if (lower.includes('corporate') || lower.includes('elite')) return 'Corporate Elite';
         return str; // Preserves any specific custom club text
+      };
+
+      // Robust Currency / Premium Normalization Utility
+      const normalizeAgentPremium = (raw, existingPremium = 0) => {
+        if (raw === undefined || raw === null || raw === '') {
+          return existingPremium || 0;
+        }
+        if (typeof raw === 'number' && !isNaN(raw)) {
+          return Math.round(raw);
+        }
+        const str = String(raw).trim();
+        if (!str) return existingPremium || 0;
+        // Strip everything except digits and minus
+        const digitsOnly = str.replace(/[^0-9-]/g, '');
+        if (!digitsOnly) return existingPremium || 0;
+        const num = parseInt(digitsOnly, 10);
+        return (!isNaN(num) && isFinite(num)) ? num : (existingPremium || 0);
+      };
+
+      // Format Currency to Indian Rupee (INR)
+      const formatCurrencyINR = (num) => {
+        const n = Number(num) || 0;
+        return '₹' + n.toLocaleString('en-IN');
       };
 
       // Download Standard Sample Excel/CSV Template for Agent Enrollment & Upload
@@ -6780,22 +6800,24 @@
         const sampleHeaders = [
           'Agent Code',
           'Agent Name',
-          'Date of Joining',
+          'Agent Code Generated Date',
           'Current Club',
+          'Current Premium',
           'Reporting Type',
           'Reporting Leader (TSE or FLS)',
-          'Mobile Number',
+          'Phone Number',
           'Email Address'
         ];
 
         const sampleRows = [
           sampleHeaders,
-          // Existing Agents updates example
-          ['1001543-01', 'Omana Mv', '2024-06-15', 'Gold Club (20%)', 'TSE', defaultTseOption, '+91 98460 00001', 'omana@branchagency.internal'],
-          ['1149248-01', 'Rajoy Mathew George', '2024-03-20', 'Silver Club (18%)', 'TSE', defaultTseOption, '+91 98460 00002', 'rajoy@branchagency.internal'],
-          // New Agents enrollment example
-          ['1165801-01', 'Anish Kumar', '2025-01-15', 'Associate (15%)', 'FLS', defaultFlsOption, '+91 98460 00003', 'anish.kumar@branchagency.internal'],
-          ['1165802-01', 'Reshma Mohan', '2025-02-01', 'Silver Club (18%)', 'TSE', defaultTseOption, '+91 98460 00004', 'reshma.m@branchagency.internal']
+          // Existing Agents updates example with Code Generated Date, Club, and Premium
+          ['1001543-01', 'Omana Mv', '2024-06-15', 'Diamond Club (25%)', '₹4,85,000', 'TSE', defaultTseOption, '+91 98460 00001', 'omana.mv@branchagency.internal'],
+          ['1149248-01', 'Rajoy Mathew George', '2024-03-20', 'Gold Club (20%)', '₹3,20,000', 'TSE', defaultTseOption, '+91 98460 00002', 'rajoy.george@branchagency.internal'],
+          // New Agents enrollment example with Code Generated Date, Club, and Premium
+          ['1165801-01', 'Anish Kumar', '2025-01-15', 'Silver Club (18%)', '₹1,75,000', 'FLS', defaultFlsOption, '+91 98460 00003', 'anish.kumar@branchagency.internal'],
+          ['1165802-01', 'Reshma Mohan', '2025-02-01', 'Silver Club (18%)', '₹1,15,000', 'TSE', defaultTseOption, '+91 98460 00004', 'reshma.mohan@branchagency.internal'],
+          ['1999888-01', 'Arun Testing Joinee', '2026-04-01', 'Associate (15%)', '₹50,000', 'TSE', defaultTseOption, '+91 98460 99999', 'arun.joinee@branchagency.internal']
         ];
 
         if (format === 'xlsx' && window.XLSX) {
@@ -6804,11 +6826,12 @@
           ws['!cols'] = [
             { wch: 16 }, // Agent Code
             { wch: 24 }, // Agent Name
-            { wch: 18 }, // Date of Joining
-            { wch: 20 }, // Current Club
+            { wch: 24 }, // Agent Code Generated Date
+            { wch: 22 }, // Current Club
+            { wch: 18 }, // Current Premium
             { wch: 16 }, // Reporting Type
-            { wch: 32 }, // Reporting Leader
-            { wch: 18 }, // Mobile Number
+            { wch: 34 }, // Reporting Leader
+            { wch: 18 }, // Phone Number
             { wch: 32 }  // Email Address
           ];
           for (let r = 1; r < sampleRows.length; r++) {
@@ -6820,7 +6843,7 @@
           }
           window.XLSX.utils.book_append_sheet(wb, ws, 'Agent_Enrollment_Template');
           window.XLSX.writeFile(wb, 'Sample_Agent_Enrollment_and_Upload_Template.xlsx');
-          showToast('📥 Downloaded Clean Sample Excel (.xlsx) with Agent Code, Name, Joining Date & Club!', 'success');
+          showToast('📥 Downloaded Clean Sample Excel (.xlsx) with Agent Code, Name, Code Generated Date, Club & Current Premium!', 'success');
         } else {
           const csvContent = sampleRows.map(r => r.map(val => `"${val}"`).join(',')).join('\n');
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -6831,11 +6854,11 @@
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          showToast('📥 Downloaded Clean Sample CSV with Agent Code, Name, Joining Date & Club!', 'success');
+          showToast('📥 Downloaded Clean Sample CSV with Agent Code, Name, Code Generated Date, Club & Current Premium!', 'success');
         }
       };
 
-      // Handler for Uploading Agent Excel File with Intelligent Column Parsing
+      // Handler: File Upload (Excel or CSV) with Robust Multi-Column Identification
       const handleAgentFileUpload = (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
@@ -6877,150 +6900,170 @@
             const defaultFls = flsList[0] || null;
 
             const isPreselectedDirectBM = agentImportDefaultLeaderId === 'DIRECT_BM' || agentImportDefaultLeaderId === 'bm-direct';
-            const preselectedLeader = teamPool.find(m => m.id === agentImportDefaultLeaderId) || null;
+            const preselectedLeader = !isPreselectedDirectBM && agentImportDefaultLeaderId
+              ? teamPool.find(m => m.id === agentImportDefaultLeaderId)
+              : null;
 
-            // Track seen codes within this file to flag duplicates
-            const seenFileCodes = new Set();
-            const seenFileNames = new Set();
+            const seenFileCodes = new Map();
+            const seenFileNames = new Map();
 
             const staged = rawData.map((row, index) => {
-              const tempId = `stage-${Date.now()}-${index}`;
+              const tempId = `stg-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 4)}`;
 
               // 1. Extract Agent Code
               let rawCode = extractRowVal(row, [
-                'code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id', 
-                'agent_code', 'agent code', 'advisor code', 'agent id'
+                'code', 'agentcode', 'bdacode', 'advisorcode', 'agentid', 'id',
+                'agent_code', 'agent code', 'agent-code', 'agencycode', 'agency_code'
               ]);
+              if (rawCode && /^[0-9.]+[eE][+-]?[0-9]+$/.test(rawCode)) {
+                try {
+                  const num = Number(rawCode);
+                  if (!isNaN(num) && Number.isFinite(num)) {
+                    rawCode = num.toLocaleString('fullwide', { useGrouping: false });
+                  }
+                } catch (e) {}
+              }
+              if (/^\d+\.0+$/.test(rawCode)) {
+                rawCode = rawCode.replace(/\.0+$/, '');
+              }
 
               // 2. Extract Agent Name
               let rawName = extractRowVal(row, [
-                'name', 'agentname', 'fullname', 'advisorname', 'advisor', 
-                'agent_name', 'agent name', 'full_name', 'advisor name'
+                'name', 'agentname', 'fullname', 'advisorname', 'advisor',
+                'agent_name', 'agent name', 'full_name', 'advisor_name'
               ]);
 
-              // 3. Extract Date of Joining / Code Generated Date
+              // 3. Extract Agent Code Generated Date / Date of Joining
               const rawDate = extractRowVal(row, [
-                'date of joining', 'joining date', 'dateofjoining', 'joiningdate', 'doj',
-                'code generated date', 'codegenerateddate', 'code date', 'coding date',
+                'agent code generated date', 'code generated date', 'codegenerateddate',
+                'agentcodegenerateddate', 'code date', 'date of joining', 'joining date',
+                'dateofjoining', 'joiningdate', 'doj', 'appointment date', 'appointmentdate',
                 'start date', 'startdate', 'created date', 'date', 'joined date', 'joineddate', 'joined'
               ]);
 
               // 4. Extract Current Club / Club Tier
               const rawClub = extractRowVal(row, [
-                'current club', 'club', 'currentclub', 'club tier', 'clubtier', 
-                'club status', 'clubstatus', 'tier', 'agent club', 'category', 'agent category', 'club name'
+                'current club', 'club', 'currentclub', 'club tier', 'clubtier',
+                'club status', 'clubstatus', 'tier', 'agent club', 'agentclub',
+                'category', 'agent category', 'club name', 'clubname'
               ]);
 
-              // 5. Extract Contact
-              const rawPhone = extractRowVal(row, ['phone', 'phonenumber', 'mobile', 'mobileno', 'contact', 'contactno', 'tel', 'cell']);
-              const rawEmail = extractRowVal(row, ['email', 'emailid', 'mail', 'emailaddress']);
-
-              // 6. Extract Leader & Hierarchy
-              const rawReporting = extractRowVal(row, ['reporting type', 'reportingtype', 'type', 'hierarchy', 'segment', 'channel', 'role']);
-              let rawLeader = extractRowVal(row, [
-                'tse name', 'tse_name', 'tse name', 'tse leader', 'tseleader', 'leader', 
-                'reportsto', 'manager', 'tse', 'fls', 'supervisor', 'reporting to', 'reporting manager', 'fls manager'
+              // 5. Extract Current Premium
+              const rawPremium = extractRowVal(row, [
+                'current premium', 'currentpremium', 'premium', 'total premium', 'totalpremium',
+                'premium amount', 'premiumamount', 'active premium', 'activepremium',
+                'current business premium', 'business premium', 'businesspremium',
+                'achieved vol', 'volume', 'fyp', 'current premium (₹)', 'current premium (rs)',
+                'premium (₹)', 'premium (rs)', 'premium(rs)', 'premium(₹)'
               ]);
-              const rawTseCode = extractRowVal(row, ['tse code', 'tsecode', 'tse_code', 'leader code', 'manager code']);
-              const rawTerritory = extractRowVal(row, ['territory', 'location', 'branch', 'region', 'area']);
 
-              // Fallback for headerless rows
-              const rowKeys = Object.keys(row);
-              if (!rawCode && !rawName && rowKeys.length >= 2) {
-                rawCode = String(row[rowKeys[0]] || '').trim();
-                rawName = String(row[rowKeys[1]] || '').trim();
+              // 6. Extract Phone Number
+              const rawPhone = extractRowVal(row, [
+                'phone', 'phonenumber', 'mobile', 'mobilenumber', 'contact',
+                'contactnumber', 'phone_number', 'mobile_number', 'tel'
+              ]);
+
+              // 7. Extract Email Address
+              const rawEmail = extractRowVal(row, [
+                'email', 'emailaddress', 'mail', 'email_address'
+              ]);
+
+              // 8. Extract Reporting Type & Leader
+              const rawReporting = extractRowVal(row, [
+                'reportingtype', 'type', 'hierarchy', 'reporting_type', 'reporting type'
+              ]);
+              const rawTseCode = extractRowVal(row, [
+                'tsename', 'tsecode', 'tse', 'leader', 'reportingto', 'reporting_to',
+                'reporting leader', 'reportingleader', 'manager', 'salesmanager', 'fls'
+              ]);
+              const rawTerritory = extractRowVal(row, [
+                'territory', 'location', 'branch', 'place', 'city'
+              ]);
+
+              // Fallback heuristic if headers not recognized
+              if (!rawName && !rawCode) {
+                const rowKeys = Object.keys(row);
+                if (rowKeys.length >= 2) {
+                  rawCode = String(row[rowKeys[0]] || '').trim();
+                  rawName = String(row[rowKeys[1]] || '').trim();
+                }
               }
-
-              if (!rawCode && !rawName) return null;
 
               const cleanCode = (rawCode || '').trim().toUpperCase();
               let cleanName = (rawName || '').trim();
               const lowerName = cleanName.toLowerCase();
-              const isPlaceholderName = !cleanName ||
-                ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-', '--'].includes(lowerName);
+              const isPlaceholderName = ['advisor name', 'new advisor', 'full name', 'agent name', 'name', 'na', 'n/a', '-'].includes(lowerName);
 
-              // Match against existing active agents in branchTeam
-              const existingAgent = (branchTeam || []).find(m => {
+              // Match against live server/database roster
+              const existingAgent = teamPool.find(m => {
                 const mCode = (m.code || '').trim().toUpperCase();
                 const mName = (m.name || '').trim().toLowerCase();
-                const mPhone = (m.phone || '').trim().replace(/[^0-9+]/g, '');
-                const cleanPhone = (rawPhone || '').trim().replace(/[^0-9+]/g, '');
+                const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+                const cleanPhone = (rawPhone || '').replace(/[^0-9]/g, '');
                 return (cleanCode && mCode === cleanCode) ||
-                       (!isPlaceholderName && lowerName && mName === lowerName) ||
-                       (cleanPhone && cleanPhone.length >= 10 && mPhone && mPhone.slice(-10) === cleanPhone.slice(-10));
+                       (!isPlaceholderName && cleanName.length > 3 && mName === lowerName) ||
+                       (cleanPhone.length >= 10 && mPhone && mPhone.slice(-10) === cleanPhone.slice(-10));
               });
 
-              if (isPlaceholderName) {
-                if (cleanCode && existingAgent && existingAgent.name) {
-                  cleanName = existingAgent.name;
-                } else {
-                  return null;
-                }
+              const isUpdate = Boolean(existingAgent);
+              const finalName = cleanName || (existingAgent ? existingAgent.name : `Agent ${cleanCode || index + 1}`);
+
+              // Resolve Reporting Leader
+              let targetReportingType = (rawReporting || '').toUpperCase();
+              if (!['TSE', 'FLS', 'BM'].includes(targetReportingType)) {
+                targetReportingType = agentImportDefaultReportingType || (existingAgent ? (existingAgent.reportsToRole === 'SALES_MANAGER' ? 'FLS' : 'TSE') : 'TSE');
               }
 
-              const finalName = cleanName;
-              if (!finalName) return null;
-
-              // Resolve Hierarchy
-              let reportingType = 'TSE';
               let reportsToId = '';
               let reportsToName = '';
-              let reportsToRole = 'TSE';
+              let reportsToRole = targetReportingType === 'FLS' ? 'SALES_MANAGER' : (targetReportingType === 'BM' ? 'BRANCH_MANAGER' : 'TSE');
 
               if (rawTseCode) {
-                const qTseCode = rawTseCode.toLowerCase().trim();
-                const matchedLeader = teamPool.find(m =>
-                  (m.code && m.code.toLowerCase().trim() === qTseCode) ||
-                  (m.id && m.id.toLowerCase().trim() === qTseCode)
-                );
-                if (matchedLeader) {
-                  reportsToId = matchedLeader.id;
-                  reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
-                  reportsToRole = matchedLeader.role;
-                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
-                }
-              }
-
-              if (!reportsToId && rawLeader) {
-                const qLeader = rawLeader.toLowerCase().trim();
-                let matchedLeader = teamPool.find(m => {
-                  const mName = (m.name || '').toLowerCase().trim();
-                  const mCode = (m.code || '').toLowerCase().trim();
-                  return (
-                    (mName && (mName.includes(qLeader) || qLeader.includes(mName))) ||
-                    (mCode && (mCode.includes(qLeader) || qLeader.includes(mCode)))
-                  );
+                const qTseCode = rawTseCode.trim().toLowerCase();
+                const matchedLeader = teamPool.find(m => {
+                  const qLeader = (targetReportingType === 'FLS' ? m.role === 'SALES_MANAGER' : m.role === 'TSE');
+                  const mName = (m.name || '').toLowerCase();
+                  const mCode = (m.code || '').toLowerCase();
+                  return qLeader && (mName.includes(qTseCode) || mCode.includes(qTseCode) || qTseCode.includes(mName));
                 });
                 if (matchedLeader) {
                   reportsToId = matchedLeader.id;
                   reportsToName = `${matchedLeader.name} (${matchedLeader.code})`;
                   reportsToRole = matchedLeader.role;
-                  reportingType = matchedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
                 }
               }
 
               if (!reportsToId) {
-                if (isPreselectedDirectBM) {
-                  reportsToId = 'bm-direct';
-                  reportsToName = 'Direct to Branch Manager';
-                  reportsToRole = 'BRANCH_MANAGER';
-                  reportingType = 'BM';
-                } else if (preselectedLeader) {
+                if (preselectedLeader) {
                   reportsToId = preselectedLeader.id;
                   reportsToName = `${preselectedLeader.name} (${preselectedLeader.code})`;
                   reportsToRole = preselectedLeader.role;
-                  reportingType = preselectedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
-                } else if (defaultTse) {
-                  reportsToId = defaultTse.id;
-                  reportsToName = `${defaultTse.name} (${defaultTse.code})`;
-                  reportsToRole = 'TSE';
-                  reportingType = 'TSE';
+                  targetReportingType = preselectedLeader.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+                } else if (isPreselectedDirectBM) {
+                  reportsToId = 'bm-direct';
+                  reportsToName = 'Direct to Branch Manager';
+                  reportsToRole = 'BRANCH_MANAGER';
+                  targetReportingType = 'BM';
+                } else if (existingAgent && existingAgent.reportsToId) {
+                  reportsToId = existingAgent.reportsToId;
+                  reportsToName = existingAgent.reportsToName;
+                  reportsToRole = existingAgent.reportsToRole;
+                } else {
+                  const fallbackLeader = targetReportingType === 'FLS' ? defaultFls : defaultTse;
+                  if (fallbackLeader) {
+                    reportsToId = fallbackLeader.id;
+                    reportsToName = `${fallbackLeader.name} (${fallbackLeader.code})`;
+                    reportsToRole = fallbackLeader.role;
+                  } else {
+                    reportsToId = 'bm-direct';
+                    reportsToName = 'Direct to Branch Manager';
+                    reportsToRole = 'BRANCH_MANAGER';
+                    targetReportingType = 'BM';
+                  }
                 }
               }
 
-              const isUpdate = Boolean(existingAgent);
-
-              // Field comparison & differences calculation
+              // Evaluate Differences (Old vs New)
               const oldJoinedDate = existingAgent ? (existingAgent.joinedDate || '2025-01-01') : '';
               const newJoinedDate = normalizeAgentJoiningDate(rawDate || oldJoinedDate || '2025-01-01');
               const dateChanged = isUpdate && Boolean(rawDate && newJoinedDate !== oldJoinedDate);
@@ -7029,64 +7072,78 @@
               const newClubTier = normalizeAgentClubTier(rawClub, oldClubTier || 'Associate (15%)');
               const clubChanged = isUpdate && Boolean(rawClub && newClubTier !== oldClubTier);
 
+              const oldPremium = existingAgent ? (Number(existingAgent.currentPremium || existingAgent.lastBusinessAmount || 0)) : 0;
+              const newPremium = normalizeAgentPremium(rawPremium, oldPremium);
+              const premiumChanged = isUpdate && Boolean(rawPremium !== '' && newPremium !== oldPremium);
+
               const oldPhone = existingAgent ? (existingAgent.phone || '') : '';
-              const finalPhone = rawPhone.trim() || oldPhone || '+91 98000 00000';
-              const phoneChanged = isUpdate && Boolean(rawPhone.trim() && rawPhone.trim() !== oldPhone);
+              const finalPhone = (rawPhone || '').trim() || oldPhone || '+91 98000 00000';
+              const phoneChanged = isUpdate && Boolean(rawPhone && finalPhone !== oldPhone);
 
               const oldReportsToName = existingAgent ? (existingAgent.reportsToName || '') : '';
               const leaderChanged = isUpdate && Boolean(reportsToName && reportsToName !== oldReportsToName);
 
-              // Check for duplicate in the file
-              let isFileDup = false;
+              // Batch duplicate detection
+              let isBatchDup = false;
               let dupReason = '';
-              if (cleanCode && seenFileCodes.has(cleanCode)) {
-                isFileDup = true;
-                dupReason = `Duplicate Agent Code '${cleanCode}' in uploaded file`;
-              } else if (cleanCode) {
-                seenFileCodes.add(cleanCode);
+              if (cleanCode) {
+                if (seenFileCodes.has(cleanCode)) {
+                  isBatchDup = true;
+                  dupReason = `Duplicate Agent Code '${cleanCode}' in upload`;
+                } else {
+                  seenFileCodes.set(cleanCode, tempId);
+                }
+              }
+              if (!cleanCode && lowerName && !isPlaceholderName) {
+                if (seenFileNames.has(lowerName)) {
+                  isBatchDup = true;
+                  dupReason = `Duplicate Agent Name '${finalName}' in upload`;
+                } else {
+                  seenFileNames.set(lowerName, tempId);
+                }
               }
 
-              const action = isFileDup ? 'DUPLICATE' : (isUpdate ? 'UPDATE' : 'NEW');
+              let action = isUpdate ? 'UPDATE' : 'NEW';
+              if (isBatchDup) action = 'DUPLICATE';
 
               return {
                 tempId,
-                isApproved: !isFileDup, // Auto-tick approval for clean records
-                action,
-                duplicateReason: dupReason,
                 existingAgentId: existingAgent ? existingAgent.id : null,
-                existingAgentRecord: existingAgent || null,
-                code: cleanCode || (existingAgent ? existingAgent.code : `BDA-${Math.floor(1000 + Math.random() * 9000)}`),
+                isUpdate,
+                action,
+                isApproved: !isBatchDup, // Checked by default unless duplicate
+                code: cleanCode || (existingAgent ? existingAgent.code : ''),
                 name: finalName,
-                // Joining Date
+                // Code Generated Date / Joining Date
                 joinedDate: newJoinedDate,
                 oldJoinedDate,
                 dateChanged,
-                // Club
+                // Current Club
                 clubTier: newClubTier,
                 oldClubTier,
                 clubChanged,
-                // Phone & Contact
+                // Current Premium
+                currentPremium: newPremium,
+                oldPremium,
+                premiumChanged,
+                // Reporting
+                reportingType: targetReportingType,
+                reportsToId,
+                reportsToName,
+                reportsToRole,
+                oldReportsToName,
+                leaderChanged,
+                // Contacts
                 phone: finalPhone,
                 oldPhone,
                 phoneChanged,
-                email: rawEmail.trim() || (existingAgent ? existingAgent.email : ''),
-                // Hierarchy
-                reportingType,
-                reportsToId: reportsToId || (existingAgent ? existingAgent.reportsToId : ''),
-                reportsToName: reportsToName || (existingAgent ? existingAgent.reportsToName : ''),
-                oldReportsToName,
-                leaderChanged,
-                reportsToRole,
-                territory: rawTerritory.trim() || (existingAgent ? existingAgent.territory : 'Central Metro Hub'),
-                vertical: existingAgent ? existingAgent.vertical : 'Branch Agency Vertical',
-                hasDiffs: dateChanged || clubChanged || phoneChanged || leaderChanged
+                email: (rawEmail || '').trim() || (existingAgent ? existingAgent.email : `${finalName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@branchagency.internal`),
+                territory: (rawTerritory || '').trim() || (existingAgent ? existingAgent.territory : 'Central Metro Hub'),
+                isBatchDup,
+                dupReason,
+                hasDiffs: dateChanged || clubChanged || premiumChanged || phoneChanged || leaderChanged
               };
-            }).filter(Boolean);
-
-            if (staged.length === 0) {
-              showToast('⚠️ No valid agents found in uploaded file. Please ensure rows have valid Agent Names.', 'warning');
-              return;
-            }
+            });
 
             setAgentImportStagingRows(staged);
             setShowAgentExcelImportModal(false);
@@ -7095,38 +7152,36 @@
             const newCount = staged.filter(r => r.action === 'NEW').length;
             const updateCount = staged.filter(r => r.action === 'UPDATE').length;
             const dupCount = staged.filter(r => r.action === 'DUPLICATE').length;
-
-            showToast(`📂 Staged ${staged.length} agents: ${updateCount} matches found in database, ${newCount} new enrollments identified!`, 'success');
+            showToast(`✅ Analyzed ${staged.length} agents: ${updateCount} matches found on server, ${newCount} new advisors identified, ${dupCount} duplicates flagged. Ready for review!`, 'success');
           } catch (err) {
-            console.error('Error parsing agent file:', err);
-            showToast(`❌ Error reading file: ${err.message}`, 'error');
+            console.error('Agent Excel Upload Processing Error:', err);
+            showToast(`❌ Error parsing file: ${err.message || 'Unknown error'}`, 'error');
           }
         };
 
         if (isExcel) {
           reader.readAsArrayBuffer(file);
         } else {
-          reader.readAsText(file);
+          reader.readAsText(file, 'utf-8');
         }
-        e.target.value = '';
       };
 
-      // Toggle Approval Tick for Individual Row
+      // Toggle Approval Checkbox for Individual Row
       const handleToggleApproveRow = (tempId) => {
-        setAgentImportStagingRows(prev => prev.map(r => 
-          r.tempId === tempId ? { ...r, isApproved: !r.isApproved } : r
+        setAgentImportStagingRows(prev => prev.map(row =>
+          row.tempId === tempId ? { ...row, isApproved: !row.isApproved } : row
         ));
       };
 
-      // Master Toggle: Approve All / Uncheck All
-      const handleToggleApproveAll = (selectAll = true) => {
-        setAgentImportStagingRows(prev => prev.map(r => 
-          r.action === 'DUPLICATE' ? { ...r, isApproved: false } : { ...r, isApproved: selectAll }
-        ));
-        showToast(selectAll ? '✓ Selected and approved all clean rows for merging' : 'Unchecked all rows', 'info');
+      // Toggle All Approval Checkboxes (Select All / Deselect All)
+      const handleToggleApproveAll = (selectAll) => {
+        setAgentImportStagingRows(prev => prev.map(row => ({
+          ...row,
+          isApproved: selectAll
+        })));
       };
 
-      // Inline field update for staging row with recalculation of diffs
+      // Inline update a staged row field
       const handleUpdateStagedRow = (tempId, field, value) => {
         setAgentImportStagingRows(prev => prev.map(row => {
           if (row.tempId !== tempId) return row;
@@ -7137,67 +7192,70 @@
           if (field === 'clubTier') {
             updated.clubChanged = Boolean(updated.oldClubTier && value !== updated.oldClubTier);
           }
+          if (field === 'currentPremium') {
+            const num = normalizeAgentPremium(value, updated.oldPremium);
+            updated.currentPremium = num;
+            updated.premiumChanged = Boolean(num !== updated.oldPremium);
+          }
           if (field === 'phone') {
             updated.phoneChanged = Boolean(updated.oldPhone && value !== updated.oldPhone);
           }
           if (field === 'reportsToId') {
             const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
-            const foundLdr = teamPool.find(m => m.id === value);
-            if (foundLdr) {
-              updated.reportsToName = `${foundLdr.name} (${foundLdr.code})`;
-              updated.reportsToRole = foundLdr.role;
-              updated.reportingType = foundLdr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
-            } else if (value === 'bm-direct') {
+            if (value === 'bm-direct' || value === 'DIRECT_BM') {
+              updated.reportsToId = 'bm-direct';
               updated.reportsToName = 'Direct to Branch Manager';
               updated.reportsToRole = 'BRANCH_MANAGER';
               updated.reportingType = 'BM';
+            } else {
+              const foundLdr = teamPool.find(m => m.id === value);
+              if (foundLdr) {
+                updated.reportsToId = foundLdr.id;
+                updated.reportsToName = `${foundLdr.name} (${foundLdr.code})`;
+                updated.reportsToRole = foundLdr.role;
+                updated.reportingType = foundLdr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE';
+              }
             }
             updated.leaderChanged = Boolean(updated.oldReportsToName && updated.reportsToName !== updated.oldReportsToName);
           }
-          updated.hasDiffs = updated.dateChanged || updated.clubChanged || updated.phoneChanged || updated.leaderChanged;
+          updated.hasDiffs = updated.dateChanged || updated.clubChanged || updated.premiumChanged || updated.phoneChanged || updated.leaderChanged;
           return updated;
         }));
       };
 
-      // Open Live Match Modal for In-depth Inspection and Side-by-Side Comparison
+      // Open Live Match Side-by-Side Modal
       const handleOpenLiveMatch = (row) => {
         setAgentLiveMatchRow({ ...row });
         setShowAgentLiveMatchModal(true);
       };
 
-      // Save Changes from Live Match Modal and Tick for Approval
-      const handleSaveLiveMatch = (updatedRow) => {
-        setAgentImportStagingRows(prev => prev.map(r => 
-          r.tempId === updatedRow.tempId ? { ...updatedRow, isApproved: true } : r
-        ));
+      // Save adjustments made in Live Match Side-by-Side Modal
+      const handleSaveLiveMatch = (editedRow) => {
+        if (!editedRow) return;
+        setAgentImportStagingRows(prev => prev.map(r => r.tempId === editedRow.tempId ? { ...editedRow, isApproved: true } : r));
         setShowAgentLiveMatchModal(false);
         setAgentLiveMatchRow(null);
-        showToast(`✓ Saved and approved reconciliation for Agent @${updatedRow.code}`, 'success');
+        showToast(`✅ Matched & updated ${editedRow.name} (${editedRow.code})`, 'success');
       };
 
-      // Remove row from staging list
+      // Discard a single row from staging
       const handleRemoveStagedRow = (tempId) => {
         setAgentImportStagingRows(prev => prev.filter(r => r.tempId !== tempId));
       };
 
-      // Remove all duplicate rows
+      // Discard all flagged duplicate rows
       const handleRemoveAllDuplicates = () => {
-        setAgentImportStagingRows(prev => prev.filter(r => r.action !== 'DUPLICATE'));
-        showToast('🧹 Cleaned all duplicate rows from staging review', 'info');
+        const initialCount = agentImportStagingRows.length;
+        const cleaned = agentImportStagingRows.filter(r => !r.isBatchDup);
+        setAgentImportStagingRows(cleaned);
+        showToast(`🗑️ Removed ${initialCount - cleaned.length} duplicate rows.`, 'info');
       };
 
-      // Final Confirmation & Merge: Adds new agents and updates matched existing agents in database
+      // Final Confirmation: Merge Ticked / Approved Agents into Live Team Database
       const handleConfirmBulkAgentImport = () => {
-        if (!agentImportStagingRows || agentImportStagingRows.length === 0) {
-          showToast('⚠️ No records to import.', 'warning');
-          return;
-        }
-
-        // Only process rows that have the approval checkmark ticked
-        const approvedRows = agentImportStagingRows.filter(r => r.isApproved && r.action !== 'DUPLICATE');
-
+        const approvedRows = (agentImportStagingRows || []).filter(r => r.isApproved);
         if (approvedRows.length === 0) {
-          showToast('⚠️ No agents selected for approval! Please tick the checkmark on the agents you wish to merge.', 'warning');
+          showToast('⚠️ No approved agents ticked for import. Please tick [✓] the rows you want to merge.', 'warning');
           return;
         }
 
@@ -7206,6 +7264,8 @@
         let updateCount = 0;
         let dateUpdateCount = 0;
         let clubUpdateCount = 0;
+        let premiumUpdateCount = 0;
+        let phoneUpdateCount = 0;
 
         let updatedTeam = [...branchTeam];
         const processedCodes = new Set();
@@ -7213,21 +7273,22 @@
         approvedRows.forEach(row => {
           const cleanCode = (row.code || '').trim().toUpperCase();
           const cleanName = (row.name || '').trim();
-          if (!cleanName) return;
 
-          if (cleanCode && processedCodes.has(cleanCode)) return;
+          if (cleanCode && processedCodes.has(cleanCode)) {
+            return; // Skip repeated codes in same merge run
+          }
           if (cleanCode) processedCodes.add(cleanCode);
 
-          // Find existing agent in updatedTeam
+          // Find existing agent in roster
           const existingIdx = updatedTeam.findIndex(m => {
             if (row.existingAgentId && m.id === row.existingAgentId) return true;
             const mCode = (m.code || '').trim().toUpperCase();
             const mName = (m.name || '').trim().toLowerCase();
-            return (cleanCode && mCode === cleanCode) || (mName === cleanName.toLowerCase());
+            return (cleanCode && mCode === cleanCode) || (cleanName && mName === cleanName.toLowerCase());
           });
 
           if (existingIdx !== -1) {
-            // MERGE & UPDATE EXISTING AGENT IN DATABASE
+            // UPDATE EXISTING AGENT IN PLACE
             const current = updatedTeam[existingIdx];
             if (row.dateChanged || (row.joinedDate && row.joinedDate !== current.joinedDate)) {
               dateUpdateCount++;
@@ -7235,41 +7296,50 @@
             if (row.clubChanged || (row.clubTier && row.clubTier !== current.clubTier)) {
               clubUpdateCount++;
             }
+            if (row.premiumChanged || (row.currentPremium !== undefined && row.currentPremium !== (current.currentPremium || current.lastBusinessAmount))) {
+              premiumUpdateCount++;
+            }
+            if (row.phoneChanged || (row.phone && row.phone !== current.phone)) {
+              phoneUpdateCount++;
+            }
 
             updatedTeam[existingIdx] = {
               ...current,
               name: cleanName || current.name,
               code: cleanCode || current.code,
-              joinedDate: row.joinedDate || current.joinedDate, // Joining Date updated!
+              joinedDate: row.joinedDate || current.joinedDate, // Agent Code Generated Date updated!
               clubTier: row.clubTier || current.clubTier,       // Current Club updated!
+              currentPremium: row.currentPremium !== undefined ? row.currentPremium : (current.currentPremium || current.lastBusinessAmount || 0), // Current Premium updated!
+              lastBusinessAmount: row.currentPremium !== undefined ? row.currentPremium : (current.lastBusinessAmount || 0),
               phone: (row.phone || '').trim() || current.phone,
               email: (row.email || '').trim() || current.email,
               reportsToId: row.reportsToId || current.reportsToId,
               reportsToName: row.reportsToName || current.reportsToName,
               reportsToRole: row.reportsToRole || current.reportsToRole,
               territory: row.territory || current.territory,
-              vertical: row.vertical || current.vertical,
               status: 'Active'
             };
             updateCount++;
           } else {
-            // ENROLL NEW AGENT WITH UPLOADED JOINING DATE & CLUB
+            // ENROLL NEW AGENT WITH UPLOADED CODE GENERATED DATE, CLUB & CURRENT PREMIUM
             const newAgent = {
               id: `tm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               tenantId: currentTenantId,
               name: cleanName,
               code: cleanCode || `BDA-${Math.floor(1000 + Math.random() * 9000)}`,
               role: 'AGENT',
-              roleLabel: '🌟 Insurance Advisor (Agent)',
+              roleLabel: '⭐ Insurance Advisor (Agent)',
               reportsToId: row.reportsToId || '',
-              reportsToName: row.reportsToName || '',
+              reportsToName: row.reportsToName || 'Direct to Branch Manager',
               reportsToRole: row.reportsToRole || (row.reportingType === 'FLS' ? 'SALES_MANAGER' : 'TSE'),
-              email: (row.email || '').trim() || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@branchagency.internal`,
               phone: (row.phone || '').trim() || '+91 98000 00000',
-              vertical: row.vertical || 'Branch Agency Vertical',
+              email: (row.email || '').trim() || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@branchagency.internal`,
+              vertical: 'Branch Agency Vertical',
               territory: row.territory || 'Central Metro Hub',
               clubTier: row.clubTier || 'Associate (15%)', // Uploaded Current Club!
-              joinedDate: row.joinedDate || '2025-01-01',   // Uploaded Joining Date!
+              joinedDate: row.joinedDate || '2025-01-01',   // Uploaded Agent Code Generated Date!
+              currentPremium: row.currentPremium || 0,     // Uploaded Current Premium!
+              lastBusinessAmount: row.currentPremium || 0,
               lastActiveDate: row.joinedDate || '2025-01-01',
               miniLakpati: 'Not Started',
               contestStatus: 'Not Enrolled',
@@ -7292,9 +7362,10 @@
         setShowAgentImportStagingModal(false);
         setAgentImportStagingRows([]);
 
-        let successMsg = `🎉 Confirmed & Merged ${approvedRows.length} Agents! (${updateCount} existing updated, ${newCount} new advisors enrolled)`;
-        if (dateUpdateCount > 0) successMsg += ` • ${dateUpdateCount} joining dates synced`;
+        let successMsg = `⚡ Confirmed & Merged ${approvedRows.length} Agents! (${updateCount} existing updated, ${newCount} new advisors enrolled)`;
+        if (dateUpdateCount > 0) successMsg += ` • ${dateUpdateCount} code generated dates synced`;
         if (clubUpdateCount > 0) successMsg += ` • ${clubUpdateCount} club tiers synced`;
+        if (premiumUpdateCount > 0) successMsg += ` • ${premiumUpdateCount} premium amounts synced`;
         showToast(successMsg, 'success');
       };
 
@@ -13434,9 +13505,9 @@
                             <th className="p-3">Reporting Manager</th>
                             <th className="p-3">Mobile & Direct Call</th>
                             <th className="p-3">Last Business Date</th>
-                            <th className="p-3 text-right">Last Amount</th>
+                            <th className="p-3 text-right">Current Premium</th>
                             <th className="p-3">Inactivity Duration</th>
-                            <th className="p-3">Club / Status</th>
+                            <th className="p-3">Current Club</th>
                             <th className="p-3 text-center">Login</th>
                             <th className="p-3 text-right">Actions</th>
                           </tr>
@@ -20489,8 +20560,7 @@
           )}
 
           {/* ====================================================== */}
-          {/* ====================================================== */}
-          {/* MODAL 1: 📥 BULK UPLOAD AGENTS EXCEL & SAMPLE TEMPLATE */}
+          {/* MODAL 1: 📊 BULK UPLOAD AGENTS EXCEL & SAMPLE TEMPLATE */}
           {/* ====================================================== */}
           {showAgentExcelImportModal && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -20498,12 +20568,12 @@
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <div className="flex items-center space-x-2.5">
                     <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
-                      📥
+                      📊
                     </div>
                     <div>
                       <h3 className="font-bold text-white text-sm">Upload Agents Excel (Auto-Identify & Reconcile)</h3>
                       <p className="text-[11px] text-emerald-400 font-semibold">
-                        Identifies Code, Name, Date of Joining & Current Club • Matches Existing & Enrolls New
+                        Identifies Code, Name, Agent Code Generated Date, Current Club & Current Premium
                       </p>
                     </div>
                   </div>
@@ -20519,514 +20589,460 @@
                   {/* Reporting Hierarchy Defaults */}
                   <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="block text-emerald-400 font-bold text-xs">
-                        🎯 Target Hierarchy / Assigned Leader:
-                      </label>
-                      <span className="text-[10px] text-slate-400 font-mono">Optional • Auto-matches from sheet if present</span>
+                      <span className="font-bold text-slate-300 text-xs">Hierarchy Mapping Default</span>
+                      <span className="text-[10px] text-slate-500">(Auto-matched from file leader columns if present)</span>
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-semibold block mb-1">Default Reporting Type</label>
+                        <select
+                          value={agentImportDefaultReportingType}
+                          onChange={(e) => {
+                            setAgentImportDefaultReportingType(e.target.value);
+                            setAgentImportDefaultLeaderId('');
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="TSE">TSE (Technical Sales Exec)</option>
+                          <option value="FLS">FLS (Sales Manager)</option>
+                          <option value="BM">Direct to Branch Manager</option>
+                        </select>
+                      </div>
 
-                    <select
-                      value={agentImportDefaultLeaderId}
-                      onChange={(e) => setAgentImportDefaultLeaderId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl p-2.5 text-xs text-white font-semibold"
-                    >
-                      <option value="">-- Choose Leader for this Upload (or auto-assign from file) --</option>
-                      <optgroup label="🤝 Territory Sales Executives (TSE / DL)">
-                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                          .filter(m => m.role === 'TSE')
-                          .map(ldr => (
-                            <option key={ldr.id} value={ldr.id}>
-                              {ldr.name} ({ldr.code}) - TSE Leader
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="👔 Direct Sales Managers (FLS)">
-                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                          .filter(m => m.role === 'SALES_MANAGER')
-                          .map(ldr => (
-                            <option key={ldr.id} value={ldr.id}>
-                              {ldr.name} ({ldr.code}) - FLS Manager
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="🏢 Branch Manager">
-                        <option value="DIRECT_BM">🏢 Direct to Branch Manager</option>
-                      </optgroup>
-                    </select>
-
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      💡 Columns recognized: <strong>Agent Code</strong>, <strong>Agent Name</strong>, <strong>Date of Joining</strong> (DOJ), <strong>Current Club</strong>, and <strong>TSE / FLS Leader</strong>.
-                    </p>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-semibold block mb-1">Default Leader Assignment</label>
+                        <select
+                          value={agentImportDefaultLeaderId}
+                          onChange={(e) => setAgentImportDefaultLeaderId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="">Auto-Detect from Upload or First Available</option>
+                          <option value="DIRECT_BM">Direct to Branch Manager</option>
+                          {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                            .filter(m => agentImportDefaultReportingType === 'FLS' ? m.role === 'SALES_MANAGER' : (agentImportDefaultReportingType === 'BM' ? m.role === 'BRANCH_MANAGER' : m.role === 'TSE'))
+                            .map(ldr => (
+                              <option key={ldr.id} value={ldr.id}>
+                                {ldr.name} ({ldr.code}) - {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE'}
+                              </option>
+                            ))
+                          }
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* File Upload Drag & Drop Zone */}
-                  <div className="border-2 border-dashed border-emerald-500/40 hover:border-emerald-500/80 rounded-2xl p-6 text-center bg-emerald-950/10 transition-colors">
+                  {/* Dropzone / Upload Area */}
+                  <div className="border-2 border-dashed border-emerald-500/40 hover:border-emerald-500/70 bg-emerald-950/10 rounded-2xl p-6 text-center transition-all cursor-pointer relative group">
                     <input
                       type="file"
-                      id="agentExcelFileInput"
-                      accept=".xlsx,.xls,.csv"
+                      accept=".xlsx, .xls, .csv"
                       onChange={handleAgentFileUpload}
-                      className="hidden"
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                     />
-                    <label htmlFor="agentExcelFileInput" className="cursor-pointer block space-y-2">
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl shadow">
-                        📊
-                      </div>
-                      <div className="text-sm font-bold text-white">
-                        Click to select Excel (.xlsx, .xls) or CSV
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        Supports <strong>Date of Joining</strong> and <strong>Current Club</strong>. Auto-opens side-by-side reconciliation table!
-                      </p>
-                    </label>
-                  </div>
-
-                  {/* How it works info card */}
-                  <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-300 space-y-1.5">
-                    <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-xs">
-                      <span>⚡</span>
-                      <span>Smart Match, Approval Check & Live Reconciliation:</span>
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mb-2 group-hover:scale-110 transition-transform">
+                      📂
                     </div>
-                    <ul className="text-[11px] text-slate-400 list-disc list-inside space-y-0.5 leading-relaxed">
-                      <li><strong>Existing Codes Matched:</strong> Shows existing date & club vs uploaded date & club. Tick approval checkbox to merge updates.</li>
-                      <li><strong>New Joinees Enrolled:</strong> Brand-new agents are identified, enrolled with their uploaded joining date & club.</li>
-                      <li><strong>Live Edit Facility:</strong> Click "Edit Live" on any row to inspect, edit, or adjust before approving.</li>
-                    </ul>
+                    <p className="font-bold text-white text-xs">
+                      Drop Excel (.xlsx, .xls) or CSV Agent file here
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      or click to browse your computer
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[10px]">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 font-mono">Agent Code</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 font-mono">Agent Name</span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">Agent Code Generated Date</span>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">Current Club</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">Current Premium</span>
+                    </div>
                   </div>
 
                   {/* Sample Template Download Actions */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                  <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-white text-xs block">Need a Sample Form / Template?</span>
+                      <span className="text-[10px] text-slate-400">
+                        Pre-populated with Agent Code, Name, Code Generated Date, Current Club & Current Premium
+                      </span>
+                    </div>
                     <div className="flex items-center space-x-2">
                       <button
                         type="button"
                         onClick={() => handleDownloadAgentTemplate('xlsx')}
-                        className="px-3.5 py-2 bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/50 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all shadow-sm"
-                        title="Download sample template with Code, Name, Joining Date and Current Club"
+                        className="px-3 py-1.5 bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/50 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all shadow-sm"
+                        title="Download sample template with Code, Name, Code Generated Date, Current Club and Current Premium"
                       >
                         <span>📥</span>
-                        <span>Download Sample Template (.xlsx)</span>
+                        <span>Download Sample (.xlsx)</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDownloadAgentTemplate('csv')}
-                        className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition-colors"
+                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition-colors"
                         title="Download sample in CSV format"
                       >
                         CSV
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowAgentExcelImportModal(false)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition-colors"
-                    >
-                      Cancel
-                    </button>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowAgentExcelImportModal(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
           {/* ====================================================== */}
-          {/* MODAL 2: 📋 AGENT APPROVAL, MATCHING & MERGE RECONCILIATION */}
+          {/* MODAL 2: 📋 STAGING RECONCILIATION & APPROVAL CONSOLE */}
           {/* ====================================================== */}
           {showAgentImportStagingModal && (
-            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md overflow-y-auto flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4">
-              <div className="relative bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl max-w-7xl w-full text-xs text-slate-200 shadow-2xl animate-fadeIn flex flex-col h-[94vh] max-h-[94vh] overflow-hidden my-auto ring-1 ring-white/10">
-                
-                {/* 1. Header with Status Badges and Quick Actions */}
-                <div className="p-3 sm:p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5 shrink-0">
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-6xl w-full h-[90vh] flex flex-col text-xs text-slate-200 shadow-2xl overflow-hidden animate-fadeIn">
+
+                {/* Header */}
+                <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
-                      📋
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center text-xl shadow-lg shadow-emerald-950/60">
+                      ⚡
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-base flex items-center space-x-2">
-                        <span>Agent Excel Approval Check & Reconciliation Hub</span>
-                        <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono font-normal">
-                          {agentImportFileName}
+                      <div className="flex items-center space-x-2">
+                        <h2 className="font-extrabold text-white text-base">
+                          Agent Excel Reconciliation & Enrollment Console
+                        </h2>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                          {agentImportFileName || 'Uploaded Batch'}
                         </span>
-                      </h3>
-                      <p className="text-[11px] text-slate-400">
-                        Tick the approval checkmark on the records to merge. Edit live or inspect differences for existing codes & new enrollments.
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Verify data, review highlighted differences, tick approved agents, and merge into live roster
                       </p>
                     </div>
                   </div>
 
-                  {/* Summary Badges & Quick Action Controls */}
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <span className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 font-mono font-bold text-xs">
-                      Total: {agentImportStagingRows.length}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold text-xs flex items-center space-x-1">
-                      <span>☑️</span>
-                      <span>Approved: {agentImportStagingRows.filter(r => r.isApproved).length}</span>
-                    </span>
-                    <span className="px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono font-bold text-xs">
-                      ↻ {agentImportStagingRows.filter(r => r.action === 'UPDATE').length} Matches
-                    </span>
-                    <span className="px-2.5 py-1 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 font-mono font-bold text-xs">
-                      + {agentImportStagingRows.filter(r => r.action === 'NEW').length} New Joinees
-                    </span>
-                    {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length > 0 && (
-                      <span className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono font-bold text-xs animate-pulse">
-                        ⚠️ {agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length} Dups
-                      </span>
-                    )}
-
-                    {/* Master Merge & Approve Button in Header */}
+                  {/* Top Action Buttons */}
+                  <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      onClick={handleConfirmBulkAgentImport}
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center space-x-1.5 transition-all ring-1 ring-emerald-400/40 transform hover:scale-[1.02]"
+                      onClick={() => handleToggleApproveAll(true)}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl font-bold text-xs flex items-center space-x-1 border border-slate-700"
+                      title="Select and approve all rows"
                     >
-                      <span>✓</span>
-                      <span>Approve & Merge Selected ({agentImportStagingRows.filter(r => r.isApproved && r.action !== 'DUPLICATE').length})</span>
+                      <span>✓✓</span>
+                      <span>Tick All</span>
                     </button>
-
                     <button
-                      onClick={() => setShowAgentImportStagingModal(false)}
-                      className="text-slate-400 hover:text-white p-1.5 text-base rounded-lg hover:bg-slate-800"
-                      title="Close modal"
+                      type="button"
+                      onClick={() => handleToggleApproveAll(false)}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl font-semibold text-xs"
+                      title="Deselect all rows"
+                    >
+                      Untick All
+                    </button>
+                    {agentImportStagingRows.some(r => r.isBatchDup) && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAllDuplicates}
+                        className="px-3 py-1.5 bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-800/50 rounded-xl font-bold text-xs flex items-center space-x-1"
+                      >
+                        <span>🗑️</span>
+                        <span>Remove Flagged Duplicates</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAgentImportStagingModal(false);
+                        setAgentImportStagingRows([]);
+                      }}
+                      className="text-slate-400 hover:text-white text-lg px-2"
                     >
                       ✕
                     </button>
                   </div>
                 </div>
 
-                {/* 2. Approval Filter Pills & Master Toggles */}
-                <div className="p-3 bg-slate-950/70 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setAgentImportStatusFilter('ALL')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${agentImportStatusFilter === 'ALL' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                    >
-                      All Rows ({agentImportStagingRows.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAgentImportStatusFilter('APPROVED')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 ${agentImportStatusFilter === 'APPROVED' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                    >
-                      <span>☑️</span>
-                      <span>Approved Only ({agentImportStagingRows.filter(r => r.isApproved).length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAgentImportStatusFilter('UPDATE')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 ${agentImportStatusFilter === 'UPDATE' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                    >
-                      <span>↻</span>
-                      <span>Existing Matches ({agentImportStagingRows.filter(r => r.action === 'UPDATE').length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAgentImportStatusFilter('NEW')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 ${agentImportStatusFilter === 'NEW' ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                    >
-                      <span>🌟</span>
-                      <span>New Joinees ({agentImportStagingRows.filter(r => r.action === 'NEW').length})</span>
-                    </button>
-                    {agentImportStagingRows.some(r => r.action === 'DUPLICATE') && (
+                {/* Metrics Summary Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 p-3 bg-slate-950/60 border-b border-slate-800 shrink-0 text-center">
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block font-semibold">Total Staged</span>
+                    <strong className="text-white text-sm font-mono">{agentImportStagingRows.length}</strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-emerald-900/40">
+                    <span className="text-[10px] text-emerald-400 block font-semibold">Approved (Ticked)</span>
+                    <strong className="text-emerald-300 text-sm font-mono">
+                      {agentImportStagingRows.filter(r => r.isApproved).length}
+                    </strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-sky-900/40">
+                    <span className="text-[10px] text-sky-400 block font-semibold">Matched (Updates)</span>
+                    <strong className="text-sky-300 text-sm font-mono">
+                      {agentImportStagingRows.filter(r => r.action === 'UPDATE').length}
+                    </strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-indigo-900/40">
+                    <span className="text-[10px] text-indigo-400 block font-semibold">New Joinees</span>
+                    <strong className="text-indigo-300 text-sm font-mono">
+                      {agentImportStagingRows.filter(r => r.action === 'NEW').length}
+                    </strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-purple-900/40">
+                    <span className="text-[10px] text-purple-400 block font-semibold">Date / Club Diffs</span>
+                    <strong className="text-purple-300 text-sm font-mono">
+                      {agentImportStagingRows.filter(r => r.dateChanged || r.clubChanged).length}
+                    </strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-amber-900/40">
+                    <span className="text-[10px] text-amber-400 block font-semibold">Premium Updates</span>
+                    <strong className="text-amber-300 text-sm font-mono">
+                      {agentImportStagingRows.filter(r => r.premiumChanged).length}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="p-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center space-x-1.5">
+                    {['ALL', 'APPROVED', 'UPDATE', 'NEW', 'DUPLICATE'].map(status => (
                       <button
+                        key={status}
                         type="button"
-                        onClick={() => setAgentImportStatusFilter('DUPLICATE')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 ${agentImportStatusFilter === 'DUPLICATE' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                        onClick={() => setAgentImportStatusFilter(status)}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                          agentImportStatusFilter === status
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                        }`}
                       >
-                        <span>⚠️</span>
-                        <span>Duplicates ({agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length})</span>
+                        {status === 'ALL' && `All (${agentImportStagingRows.length})`}
+                        {status === 'APPROVED' && `Approved (${agentImportStagingRows.filter(r => r.isApproved).length})`}
+                        {status === 'UPDATE' && `Matches (${agentImportStagingRows.filter(r => r.action === 'UPDATE').length})`}
+                        {status === 'NEW' && `New Enrolling (${agentImportStagingRows.filter(r => r.action === 'NEW').length})`}
+                        {status === 'DUPLICATE' && `Duplicates (${agentImportStagingRows.filter(r => r.action === 'DUPLICATE').length})`}
                       </button>
-                    )}
+                    ))}
                   </div>
 
-                  {/* Approval Master Selection Controls */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleApproveAll(true)}
-                      className="px-3 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/50 rounded-lg font-bold text-xs flex items-center space-x-1 transition-colors"
-                      title="Tick approval checkbox on all clean rows"
-                    >
-                      <span>☑️ Tick All Approved</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleApproveAll(false)}
-                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-xs transition-colors"
-                      title="Untick approval check on all rows"
-                    >
-                      <span>⬜ Untick All</span>
-                    </button>
-                    {agentImportStagingRows.some(r => r.action === 'DUPLICATE') && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveAllDuplicates}
-                        className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 rounded-lg font-bold text-xs transition-colors"
-                      >
-                        <span>🧹 Clean Dups</span>
-                      </button>
-                    )}
-
-                    {/* Search box */}
+                  <div className="relative w-64">
                     <input
                       type="text"
+                      placeholder="Search by code, name, club, date..."
                       value={agentImportSearch}
                       onChange={(e) => setAgentImportSearch(e.target.value)}
-                      placeholder="Search code, name, club..."
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:border-emerald-500 w-44"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
 
-                {/* 3. Main Interactive Reconciliation Table */}
-                <div id="stagingTableContainer" className="flex-1 overflow-auto p-2 sm:p-4 bg-slate-950/40">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead className="bg-slate-950 text-slate-300 sticky top-0 z-20 border-b border-slate-700 shadow-sm">
+                {/* Staging Reconciliation Table */}
+                <div className="flex-1 overflow-auto p-2">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-950/90 sticky top-0 z-10 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-800">
                       <tr>
-                        <th className="p-2.5 text-center w-12">
-                          <span title="Tick Approval Checkbox">Approve</span>
+                        <th className="py-2.5 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={agentImportStagingRows.length > 0 && agentImportStagingRows.every(r => r.isApproved)}
+                            onChange={(e) => handleToggleApproveAll(e.target.checked)}
+                            className="rounded accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                            title="Tick / Untick All"
+                          />
                         </th>
-                        <th className="p-2.5 min-w-[130px]">Status / Match</th>
-                        <th className="p-2.5 min-w-[130px]">Agent Code *</th>
-                        <th className="p-2.5 min-w-[160px]">Full Name *</th>
-                        <th className="p-2.5 min-w-[170px]">Date of Joining (DOJ) *</th>
-                        <th className="p-2.5 min-w-[170px]">Current Club *</th>
-                        <th className="p-2.5 min-w-[160px]">Superior Leader</th>
-                        <th className="p-2.5 min-w-[130px]">Phone Number</th>
-                        <th className="p-2.5 text-center min-w-[120px]">Actions</th>
+                        <th className="py-2.5 px-3">Agent Details</th>
+                        <th className="py-2.5 px-3">Agent Code Generated Date</th>
+                        <th className="py-2.5 px-3">Current Club</th>
+                        <th className="py-2.5 px-3">Current Premium</th>
+                        <th className="py-2.5 px-3">Leader & Hierarchy</th>
+                        <th className="py-2.5 px-3">Match Status</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800">
+                    <tbody className="divide-y divide-slate-800/60 text-xs">
                       {agentImportStagingRows
                         .filter(row => {
-                          if (agentImportStatusFilter === 'APPROVED' && !row.isApproved) return false;
-                          if (agentImportStatusFilter === 'NEW' && row.action !== 'NEW') return false;
-                          if (agentImportStatusFilter === 'UPDATE' && row.action !== 'UPDATE') return false;
-                          if (agentImportStatusFilter === 'DUPLICATE' && row.action !== 'DUPLICATE') return false;
-                          if (agentImportSearch.trim()) {
-                            const q = agentImportSearch.toLowerCase().trim();
-                            return (
-                              (row.code || '').toLowerCase().includes(q) ||
-                              (row.name || '').toLowerCase().includes(q) ||
-                              (row.clubTier || '').toLowerCase().includes(q) ||
-                              (row.joinedDate || '').toLowerCase().includes(q) ||
-                              (row.phone || '').toLowerCase().includes(q) ||
-                              (row.reportsToName || '').toLowerCase().includes(q)
-                            );
-                          }
+                          if (agentImportStatusFilter === 'APPROVED') return row.isApproved;
+                          if (agentImportStatusFilter === 'UPDATE') return row.action === 'UPDATE';
+                          if (agentImportStatusFilter === 'NEW') return row.action === 'NEW';
+                          if (agentImportStatusFilter === 'DUPLICATE') return row.action === 'DUPLICATE';
                           return true;
                         })
-                        .map((row) => {
-                          const isUpdate = row.action === 'UPDATE';
-                          const isDuplicate = row.action === 'DUPLICATE';
-                          return (
-                            <tr
-                              key={row.tempId}
-                              className={`hover:bg-slate-800/60 transition-colors ${
-                                isDuplicate 
-                                  ? 'bg-rose-950/20 border-l-4 border-rose-500' 
-                                  : isUpdate 
-                                    ? (row.hasDiffs ? 'bg-indigo-950/30 border-l-4 border-indigo-500' : 'bg-slate-900/60') 
-                                    : 'bg-emerald-950/25 border-l-4 border-emerald-500'
-                              }`}
-                            >
-                              {/* 1. Approval Tickbox */}
-                              <td className="p-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={row.isApproved}
-                                  onChange={() => handleToggleApproveRow(row.tempId)}
-                                  disabled={isDuplicate}
-                                  className="w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-600 focus:ring-emerald-500 cursor-pointer"
-                                  title={row.isApproved ? 'Ticked for approval (will be merged)' : 'Click to tick for approval'}
-                                />
-                              </td>
+                        .filter(row => {
+                          if (!agentImportSearch.trim()) return true;
+                          const q = agentImportSearch.toLowerCase();
+                          return (row.name || '').toLowerCase().includes(q) ||
+                                 (row.code || '').toLowerCase().includes(q) ||
+                                 (row.clubTier || '').toLowerCase().includes(q) ||
+                                 (row.joinedDate || '').toLowerCase().includes(q) ||
+                                 (row.reportsToName || '').toLowerCase().includes(q);
+                        })
+                        .map((row) => (
+                          <tr
+                            key={row.tempId}
+                            className={`hover:bg-slate-800/40 transition-colors ${
+                              !row.isApproved ? 'opacity-60 bg-slate-950/40' : (row.hasDiffs ? 'bg-emerald-950/10' : '')
+                            }`}
+                          >
+                            {/* Checkbox Tick */}
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={row.isApproved}
+                                onChange={() => handleToggleApproveRow(row.tempId)}
+                                className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
+                                title={row.isApproved ? "Approved for merge" : "Excluded from merge"}
+                              />
+                            </td>
 
-                              {/* 2. Status / Match Badge */}
-                              <td className="p-2.5 whitespace-nowrap">
-                                {isDuplicate ? (
-                                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold text-[10px] border border-rose-500/40" title={row.duplicateReason}>
-                                    <span>⚠️ DUPLICATE</span>
-                                  </span>
-                                ) : isUpdate ? (
-                                  <div className="space-y-0.5">
-                                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px] border border-indigo-500/40">
-                                      <span>↻ MATCHED CODE</span>
-                                    </span>
-                                    {row.hasDiffs && (
-                                      <span className="block text-[9px] text-amber-400 font-bold">
-                                        ⚡ Updates detected
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/40">
-                                    <span>🌟 NEW ENROLLMENT</span>
+                            {/* Name & Code */}
+                            <td className="py-2 px-3">
+                              <div className="font-bold text-white flex items-center space-x-1.5">
+                                <span>{row.name}</span>
+                                {row.hasDiffs && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono" title="Record contains updates compared to server">
+                                    DIFF
                                   </span>
                                 )}
-                              </td>
+                              </div>
+                              <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-0.5">
+                                <span className="font-mono text-emerald-400 font-bold">{row.code || 'NO-CODE'}</span>
+                                <span>•</span>
+                                <span>{row.phone}</span>
+                              </div>
+                            </td>
 
-                              {/* 3. Agent Code */}
-                              <td className="p-2.5">
-                                <div className="flex items-center space-x-1.5">
-                                  <input
-                                    type="text"
-                                    value={row.code}
-                                    onChange={(e) => handleUpdateStagedRow(row.tempId, 'code', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500"
-                                  />
+                            {/* Agent Code Generated Date */}
+                            <td className="py-2 px-3">
+                              <div className="flex items-center space-x-1.5 font-mono text-slate-200">
+                                <span>📅</span>
+                                <span className="font-semibold">{row.joinedDate || '2025-01-01'}</span>
+                              </div>
+                              {row.dateChanged && (
+                                <div className="text-[10px] text-amber-400 flex items-center space-x-1 mt-0.5">
+                                  <span className="text-slate-500 line-through">{row.oldJoinedDate}</span>
+                                  <span>➔</span>
+                                  <span className="font-bold">{row.joinedDate}</span>
                                 </div>
-                                {isUpdate && row.existingAgentRecord && (
-                                  <span className="text-[10px] text-indigo-400 font-mono block mt-0.5">
-                                    Live in Database
-                                  </span>
-                                )}
-                              </td>
+                              )}
+                            </td>
 
-                              {/* 4. Full Name */}
-                              <td className="p-2.5">
-                                <input
-                                  type="text"
-                                  value={row.name}
-                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'name', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
-                                />
-                              </td>
-
-                              {/* 5. Date of Joining (DOJ) */}
-                              <td className="p-2.5">
-                                <div>
-                                  <input
-                                    type="date"
-                                    value={row.joinedDate}
-                                    onChange={(e) => handleUpdateStagedRow(row.tempId, 'joinedDate', e.target.value)}
-                                    className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-mono focus:border-emerald-500 ${row.dateChanged ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-slate-700'}`}
-                                  />
-                                  {isUpdate && row.dateChanged && (
-                                    <span className="text-[10px] text-amber-300 font-mono block mt-0.5">
-                                      Database: <strong>{row.oldJoinedDate}</strong>
-                                    </span>
-                                  )}
-                                  {!isUpdate && (
-                                    <span className="text-[9px] text-emerald-400 font-mono block mt-0.5">
-                                      New Joinee Date
-                                    </span>
-                                  )}
+                            {/* Current Club */}
+                            <td className="py-2 px-3">
+                              <div className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-white">
+                                <span>
+                                  {row.clubTier.includes('Diamond') ? '💎' :
+                                   row.clubTier.includes('Gold') ? '🥇' :
+                                   row.clubTier.includes('Silver') ? '🥈' : '⭐'}
+                                </span>
+                                <span>{row.clubTier}</span>
+                              </div>
+                              {row.clubChanged && (
+                                <div className="text-[10px] text-purple-400 flex items-center space-x-1 mt-0.5">
+                                  <span className="text-slate-500 line-through">{row.oldClubTier}</span>
+                                  <span>➔</span>
+                                  <span className="font-bold">{row.clubTier}</span>
                                 </div>
-                              </td>
+                              )}
+                            </td>
 
-                              {/* 6. Current Club */}
-                              <td className="p-2.5">
-                                <div>
-                                  <select
-                                    value={row.clubTier}
-                                    onChange={(e) => handleUpdateStagedRow(row.tempId, 'clubTier', e.target.value)}
-                                    className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500 ${row.clubChanged ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-slate-700'}`}
-                                  >
-                                    <option value="Associate (15%)">Associate (15%)</option>
-                                    <option value="Silver Club (18%)">Silver Club (18%)</option>
-                                    <option value="Gold Club (20%)">Gold Club (20%)</option>
-                                    <option value="Diamond Club (25%)">Diamond Club (25%)</option>
-                                    <option value="Chairman Club (30%)">Chairman Club (30%)</option>
-                                    <option value="CEO Club (28%)">CEO Club (28%)</option>
-                                    <option value="Corporate Elite">Corporate Elite</option>
-                                    {row.clubTier && ![
-                                      'Associate (15%)', 'Silver Club (18%)', 'Gold Club (20%)', 
-                                      'Diamond Club (25%)', 'Chairman Club (30%)', 'CEO Club (28%)', 'Corporate Elite'
-                                    ].includes(row.clubTier) && (
-                                      <option value={row.clubTier}>{row.clubTier} (Custom)</option>
-                                    )}
-                                  </select>
-                                  {isUpdate && row.clubChanged && (
-                                    <span className="text-[10px] text-amber-300 block mt-0.5">
-                                      Database: <strong>{row.oldClubTier}</strong>
-                                    </span>
-                                  )}
+                            {/* Current Premium */}
+                            <td className="py-2 px-3 font-mono">
+                              <div className="font-bold text-emerald-300 text-[11px]">
+                                {formatCurrencyINR(row.currentPremium || 0)}
+                              </div>
+                              {row.premiumChanged && (
+                                <div className="text-[10px] text-emerald-400 flex items-center space-x-1 mt-0.5">
+                                  <span className="text-slate-500 line-through">{formatCurrencyINR(row.oldPremium || 0)}</span>
+                                  <span>➔</span>
+                                  <span className="font-bold">{formatCurrencyINR(row.currentPremium || 0)}</span>
                                 </div>
-                              </td>
+                              )}
+                            </td>
 
-                              {/* 7. Assigned Superior Leader */}
-                              <td className="p-2.5">
-                                <select
-                                  value={row.reportsToId}
-                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'reportsToId', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white focus:border-emerald-500 font-semibold"
+                            {/* Hierarchy / Reporting */}
+                            <td className="py-2 px-3">
+                              <div className="text-[11px] font-semibold text-slate-200 flex items-center space-x-1">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                  row.reportingType === 'FLS' ? 'bg-amber-500/20 text-amber-300' :
+                                  row.reportingType === 'BM' ? 'bg-rose-500/20 text-rose-300' :
+                                  'bg-sky-500/20 text-sky-300'
+                                }`}>
+                                  {row.reportingType}
+                                </span>
+                                <span className="truncate max-w-[140px]" title={row.reportsToName}>
+                                  {row.reportsToName}
+                                </span>
+                              </div>
+                              {row.leaderChanged && (
+                                <span className="text-[9px] text-amber-400 block">Leader updated</span>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-2 px-3">
+                              {row.action === 'UPDATE' && (
+                                <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold inline-flex items-center space-x-1">
+                                  <span>🔄</span>
+                                  <span>Server Match (Update)</span>
+                                </span>
+                              )}
+                              {row.action === 'NEW' && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center space-x-1">
+                                  <span>✨</span>
+                                  <span>New Joinee (Enroll)</span>
+                                </span>
+                              )}
+                              {row.action === 'DUPLICATE' && (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold inline-flex items-center space-x-1" title={row.dupReason}>
+                                  <span>⚠️</span>
+                                  <span>Duplicate Flag</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-2 px-3 text-right">
+                              <div className="inline-flex items-center space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenLiveMatch(row)}
+                                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white rounded-lg border border-slate-700 font-bold text-[10px] flex items-center space-x-1 transition-all"
+                                  title="Open side-by-side match & edit drawer"
                                 >
-                                  <option value="">Select Superior Leader...</option>
-                                  <optgroup label="🤝 TSE / DL Leaders">
-                                    {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                                      .filter(m => m.role === 'TSE')
-                                      .map(ldr => (
-                                        <option key={ldr.id} value={ldr.id}>
-                                          {ldr.name} ({ldr.code}) - TSE
-                                        </option>
-                                      ))}
-                                  </optgroup>
-                                  <optgroup label="👔 FLS Sales Managers">
-                                    {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                                      .filter(m => m.role === 'SALES_MANAGER')
-                                      .map(ldr => (
-                                        <option key={ldr.id} value={ldr.id}>
-                                          {ldr.name} ({ldr.code}) - FLS
-                                        </option>
-                                      ))}
-                                  </optgroup>
-                                  <optgroup label="🏢 Branch Manager">
-                                    <option value="bm-direct">🏢 Direct to Branch Manager</option>
-                                  </optgroup>
-                                </select>
-                              </td>
-
-                              {/* 8. Phone Number */}
-                              <td className="p-2.5">
-                                <input
-                                  type="tel"
-                                  value={row.phone}
-                                  onChange={(e) => handleUpdateStagedRow(row.tempId, 'phone', e.target.value)}
-                                  className={`w-full bg-slate-950 border rounded-lg p-1.5 text-xs text-white font-mono focus:border-emerald-500 ${row.phoneChanged ? 'border-amber-500' : 'border-slate-700'}`}
-                                />
-                                {row.phoneChanged && (
-                                  <span className="text-[9px] text-amber-400 font-mono block mt-0.5">
-                                    Prev: {row.oldPhone}
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* 9. Actions: Edit Live & Remove */}
-                              <td className="p-2.5 text-center">
-                                <div className="flex items-center justify-center space-x-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenLiveMatch(row)}
-                                    className="px-2 py-1 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-300 border border-indigo-500/40 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-colors shadow-sm"
-                                    title="Open live matching modal to compare database record vs uploaded data"
-                                  >
-                                    <span>✏️ Edit Live</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveStagedRow(row.tempId)}
-                                    className="text-rose-400 hover:text-rose-300 font-bold p-1 rounded hover:bg-rose-950/40 transition-colors"
-                                    title="Remove row from staging"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                  <span>✏️</span>
+                                  <span>Edit Live</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStagedRow(row.tempId)}
+                                  className="p-1 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+                                  title="Remove from batch"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* 4. Footer Confirmation & Approval Bar */}
-                <div className="p-3 sm:p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-10">
-                  <div className="text-xs text-slate-400 flex items-center space-x-2">
-                    <span>💡 Only rows with <strong>[✓] Approval Tick</strong> will be merged into the active portal database.</span>
+                {/* Footer Bar */}
+                <div className="p-3.5 sm:p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center space-x-2 text-xs text-slate-400">
+                    <span>Ready to merge:</span>
+                    <strong className="text-emerald-400 font-mono text-sm">
+                      {agentImportStagingRows.filter(r => r.isApproved).length} of {agentImportStagingRows.length}
+                    </strong>
+                    <span>agents approved</span>
                   </div>
 
                   <div className="flex items-center space-x-2.5">
@@ -21036,7 +21052,7 @@
                         setShowAgentImportStagingModal(false);
                         setAgentImportStagingRows([]);
                       }}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors text-xs"
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                     >
                       Discard & Cancel
                     </button>
@@ -21044,41 +21060,39 @@
                     <button
                       type="button"
                       onClick={handleConfirmBulkAgentImport}
-                      className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold rounded-xl shadow-xl shadow-emerald-950/60 flex items-center space-x-2 transition-all transform hover:scale-[1.01] ring-1 ring-emerald-400/50 text-xs"
+                      className="px-6 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-950/60 flex items-center space-x-2 text-xs transition-all"
                     >
-                      <span className="text-base">✓</span>
-                      <span>Approve & Merge ({agentImportStagingRows.filter(r => r.isApproved && r.action !== 'DUPLICATE').length} Selected Agents)</span>
+                      <span>🚀</span>
+                      <span>
+                        Confirm & Merge Selected ({agentImportStagingRows.filter(r => r.isApproved).length} Agents)
+                      </span>
                     </button>
                   </div>
                 </div>
+
               </div>
             </div>
           )}
 
           {/* ====================================================== */}
-          {/* MODAL 3: 🔍 LIVE EXISTING CODE MATCH & COMPARISON DRAWER */}
+          {/* MODAL 3: ✏️ SIDE-BY-SIDE LIVE MATCH & EDIT DRAWER       */}
           {/* ====================================================== */}
           {showAgentLiveMatchModal && agentLiveMatchRow && (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-              <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-5 sm:p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn space-y-4">
-                
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full p-5 sm:p-6 text-xs text-slate-200 shadow-2xl animate-fadeIn space-y-4">
+
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <div className="flex items-center space-x-2.5">
-                    <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg">
-                      🔍
+                    <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-base">
+                      ✏️
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-sm flex items-center space-x-2">
-                        <span>Live Record Match & Reconciliation:</span>
-                        <span className="font-mono bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded-lg border border-indigo-500/30">
-                          {agentLiveMatchRow.code}
-                        </span>
+                      <h3 className="font-extrabold text-white text-sm">
+                        Live Match & Side-by-Side Comparison: {agentLiveMatchRow.name}
                       </h3>
-                      <p className="text-[11px] text-slate-400">
-                        {agentLiveMatchRow.action === 'UPDATE' 
-                          ? 'Compare live database values vs uploaded Excel data. Adjust and approve for merging.'
-                          : 'New Agent Enrollment details. Adjust and approve for merging.'}
+                      <p className="text-[11px] text-sky-400 font-semibold font-mono">
+                        Agent Code: {agentLiveMatchRow.code || 'NEW ADVISOR'} • Status: {agentLiveMatchRow.action}
                       </p>
                     </div>
                   </div>
@@ -21091,240 +21105,234 @@
                 </div>
 
                 {/* Side-by-Side Comparison Container */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  {/* Left Column: Live Database / Server Record */}
-                  <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  {/* Left Column: Server / Database Record */}
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                      <span className="font-bold text-slate-300 text-xs flex items-center space-x-1.5">
-                        <span>🏢</span>
-                        <span>Current Database / Server Record</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {agentLiveMatchRow.existingAgentRecord ? 'Live in Roster' : 'Not in Database (New)'}
-                      </span>
+                      <span className="font-bold text-slate-300 text-xs">🏛️ Current Server Database</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">Read-Only</span>
                     </div>
 
-                    {agentLiveMatchRow.existingAgentRecord ? (
-                      <div className="space-y-2.5">
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Agent Code</span>
-                          <span className="text-white font-mono font-bold text-xs">{agentLiveMatchRow.existingAgentRecord.code}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Agent Name</span>
-                          <span className="text-white font-bold text-xs">{agentLiveMatchRow.existingAgentRecord.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Date of Joining (DOJ)</span>
-                          <span className="text-indigo-300 font-mono font-bold text-xs">
-                            {agentLiveMatchRow.existingAgentRecord.joinedDate || '2025-01-01'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Current Club</span>
-                          <span className="text-amber-300 font-bold text-xs">
-                            {agentLiveMatchRow.existingAgentRecord.clubTier || 'Associate (15%)'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Superior Leader</span>
-                          <span className="text-slate-300 font-semibold text-xs">
-                            {agentLiveMatchRow.existingAgentRecord.reportsToName || 'Not Assigned'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] block">Mobile Number</span>
-                          <span className="text-slate-300 font-mono text-xs">
-                            {agentLiveMatchRow.existingAgentRecord.phone || 'None'}
-                          </span>
-                        </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Agent Name</label>
+                      <div className="text-white font-bold text-xs mt-0.5">
+                        {agentLiveMatchRow.existingAgentId ? agentLiveMatchRow.name : '— (Not on server)'}
                       </div>
-                    ) : (
-                      <div className="py-8 text-center text-slate-500 space-y-2">
-                        <div className="text-2xl">🌟</div>
-                        <p className="text-xs font-semibold text-emerald-400">Brand New Advisor Record</p>
-                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto">
-                          This agent code does not exist in the database yet. It will be enrolled as a new active advisor.
-                        </p>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Agent Code Generated Date</label>
+                      <div className="text-slate-200 font-mono text-xs mt-0.5">
+                        {agentLiveMatchRow.oldJoinedDate || '—'}
                       </div>
-                    )}
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Current Club</label>
+                      <div className="text-slate-200 text-xs mt-0.5">
+                        {agentLiveMatchRow.oldClubTier || '—'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Current Premium</label>
+                      <div className="text-slate-200 font-mono text-xs mt-0.5">
+                        {formatCurrencyINR(agentLiveMatchRow.oldPremium || 0)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Reporting Leader</label>
+                      <div className="text-slate-200 text-xs mt-0.5">
+                        {agentLiveMatchRow.oldReportsToName || '—'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold">Mobile Number</label>
+                      <div className="text-slate-200 font-mono text-xs mt-0.5">
+                        {agentLiveMatchRow.oldPhone || '—'}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Right Column: Uploaded Excel Record (Live Editable) */}
-                  <div className="bg-emerald-950/20 p-4 rounded-2xl border border-emerald-500/40 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-emerald-500/30">
-                      <span className="font-bold text-emerald-400 text-xs flex items-center space-x-1.5">
-                        <span>⚡</span>
-                        <span>Uploaded Excel Data (Live Editable)</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-emerald-300">
-                        Target for Merging
-                      </span>
+                  {/* Right Column: Uploaded Record (Editable) */}
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-500/30 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <span className="font-bold text-emerald-400 text-xs">📥 New Upload Record</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold">Editable</span>
                     </div>
 
-                    <div className="space-y-2.5">
-                      {/* Code */}
-                      <div>
-                        <label className="text-slate-400 text-[10px] block font-semibold mb-0.5">Agent Code *</label>
-                        <input
-                          type="text"
-                          value={agentLiveMatchRow.code}
-                          onChange={(e) => setAgentLiveMatchRow({ ...agentLiveMatchRow, code: e.target.value.toUpperCase() })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500"
-                        />
-                      </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Agent Name</label>
+                      <input
+                        type="text"
+                        value={agentLiveMatchRow.name || ''}
+                        onChange={(e) => setAgentLiveMatchRow({ ...agentLiveMatchRow, name: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white"
+                      />
+                    </div>
 
-                      {/* Name */}
-                      <div>
-                        <label className="text-slate-400 text-[10px] block font-semibold mb-0.5">Agent Name *</label>
-                        <input
-                          type="text"
-                          value={agentLiveMatchRow.name}
-                          onChange={(e) => setAgentLiveMatchRow({ ...agentLiveMatchRow, name: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
-                        />
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Agent Code Generated Date</label>
+                        {agentLiveMatchRow.dateChanged && (
+                          <span className="text-[9px] text-amber-400 font-semibold">Value Changed</span>
+                        )}
                       </div>
+                      <input
+                        type="date"
+                        value={agentLiveMatchRow.joinedDate || '2025-01-01'}
+                        onChange={(e) => setAgentLiveMatchRow({
+                          ...agentLiveMatchRow,
+                          joinedDate: e.target.value,
+                          dateChanged: Boolean(agentLiveMatchRow.oldJoinedDate && e.target.value !== agentLiveMatchRow.oldJoinedDate)
+                        })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
 
-                      {/* Date of Joining */}
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="text-slate-400 text-[10px] block font-semibold">Date of Joining (DOJ) *</label>
-                          {agentLiveMatchRow.dateChanged && (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
-                              ⚡ Date Updated
-                            </span>
-                          )}
-                        </div>
-                        <input
-                          type="date"
-                          value={agentLiveMatchRow.joinedDate}
-                          onChange={(e) => setAgentLiveMatchRow({ 
-                            ...agentLiveMatchRow, 
-                            joinedDate: e.target.value,
-                            dateChanged: Boolean(agentLiveMatchRow.oldJoinedDate && e.target.value !== agentLiveMatchRow.oldJoinedDate)
-                          })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono focus:border-emerald-500"
-                        />
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Current Club</label>
+                        {agentLiveMatchRow.clubChanged && (
+                          <span className="text-[9px] text-purple-400 font-semibold">Club Changed</span>
+                        )}
                       </div>
+                      <select
+                        value={agentLiveMatchRow.clubTier || 'Associate (15%)'}
+                        onChange={(e) => setAgentLiveMatchRow({
+                          ...agentLiveMatchRow,
+                          clubTier: e.target.value,
+                          clubChanged: Boolean(agentLiveMatchRow.oldClubTier && e.target.value !== agentLiveMatchRow.oldClubTier)
+                        })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white"
+                      >
+                        <option value="Associate (15%)">Associate (15%)</option>
+                        <option value="Silver Club (18%)">Silver Club (18%)</option>
+                        <option value="Gold Club (20%)">Gold Club (20%)</option>
+                        <option value="Diamond Club (25%)">Diamond Club (25%)</option>
+                        <option value="Chairman Club (30%)">Chairman Club (30%)</option>
+                        <option value="CEO Club (28%)">CEO Club (28%)</option>
+                        <option value="Corporate Elite">Corporate Elite</option>
+                      </select>
+                    </div>
 
-                      {/* Current Club */}
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="text-slate-400 text-[10px] block font-semibold">Current Club Tier *</label>
-                          {agentLiveMatchRow.clubChanged && (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
-                              ⚡ Club Updated
-                            </span>
-                          )}
-                        </div>
-                        <select
-                          value={agentLiveMatchRow.clubTier}
-                          onChange={(e) => setAgentLiveMatchRow({ 
-                            ...agentLiveMatchRow, 
-                            clubTier: e.target.value,
-                            clubChanged: Boolean(agentLiveMatchRow.oldClubTier && e.target.value !== agentLiveMatchRow.oldClubTier)
-                          })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
-                        >
-                          <option value="Associate (15%)">Associate (15%)</option>
-                          <option value="Silver Club (18%)">Silver Club (18%)</option>
-                          <option value="Gold Club (20%)">Gold Club (20%)</option>
-                          <option value="Diamond Club (25%)">Diamond Club (25%)</option>
-                          <option value="Chairman Club (30%)">Chairman Club (30%)</option>
-                          <option value="CEO Club (28%)">CEO Club (28%)</option>
-                          <option value="Corporate Elite">Corporate Elite</option>
-                        </select>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Current Premium (₹)</label>
+                        {agentLiveMatchRow.premiumChanged && (
+                          <span className="text-[9px] text-emerald-400 font-semibold">Premium Changed</span>
+                        )}
                       </div>
+                      <input
+                        type="number"
+                        placeholder="e.g. 485000"
+                        value={agentLiveMatchRow.currentPremium || 0}
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 0;
+                          setAgentLiveMatchRow({
+                            ...agentLiveMatchRow,
+                            currentPremium: val,
+                            premiumChanged: Boolean(val !== agentLiveMatchRow.oldPremium)
+                          });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
 
-                      {/* Leader */}
-                      <div>
-                        <label className="text-slate-400 text-[10px] block font-semibold mb-0.5">Assigned Leader</label>
-                        <select
-                          value={agentLiveMatchRow.reportsToId}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
-                            const found = teamPool.find(m => m.id === val);
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Reporting Leader</label>
+                      <select
+                        value={agentLiveMatchRow.reportsToId || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const teamPool = currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam;
+                          if (val === 'bm-direct' || val === 'DIRECT_BM') {
                             setAgentLiveMatchRow({
                               ...agentLiveMatchRow,
-                              reportsToId: val,
-                              reportsToName: found ? `${found.name} (${found.code})` : (val === 'bm-direct' ? 'Direct to Branch Manager' : ''),
-                              reportingType: found ? (found.role === 'SALES_MANAGER' ? 'FLS' : 'TSE') : 'BM'
+                              reportsToId: 'bm-direct',
+                              reportsToName: 'Direct to Branch Manager',
+                              reportsToRole: 'BRANCH_MANAGER',
+                              reportingType: 'BM',
+                              leaderChanged: Boolean(agentLiveMatchRow.oldReportsToName && agentLiveMatchRow.oldReportsToName !== 'Direct to Branch Manager')
                             });
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-semibold focus:border-emerald-500"
-                        >
-                          <option value="">Select Superior Leader...</option>
-                          <optgroup label="🤝 TSE Leaders">
-                            {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                              .filter(m => m.role === 'TSE')
-                              .map(ldr => (
-                                <option key={ldr.id} value={ldr.id}>{ldr.name} ({ldr.code}) - TSE</option>
-                              ))}
-                          </optgroup>
-                          <optgroup label="👔 FLS Sales Managers">
-                            {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
-                              .filter(m => m.role === 'SALES_MANAGER')
-                              .map(ldr => (
-                                <option key={ldr.id} value={ldr.id}>{ldr.name} ({ldr.code}) - FLS</option>
-                              ))}
-                          </optgroup>
-                          <optgroup label="🏢 Branch Manager">
-                            <option value="bm-direct">🏢 Direct to Branch Manager</option>
-                          </optgroup>
-                        </select>
-                      </div>
+                          } else {
+                            const found = teamPool.find(m => m.id === val);
+                            if (found) {
+                              setAgentLiveMatchRow({
+                                ...agentLiveMatchRow,
+                                reportsToId: found.id,
+                                reportsToName: `${found.name} (${found.code})`,
+                                reportsToRole: found.role,
+                                reportingType: found.role === 'SALES_MANAGER' ? 'FLS' : 'TSE',
+                                leaderChanged: Boolean(agentLiveMatchRow.oldReportsToName && agentLiveMatchRow.oldReportsToName !== `${found.name} (${found.code})`)
+                              });
+                            }
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white"
+                      >
+                        <option value="bm-direct">Direct to Branch Manager (BM)</option>
+                        {(currentTenantTeam.length > 0 ? currentTenantTeam : branchTeam)
+                          .filter(m => m.role === 'TSE' || m.role === 'SALES_MANAGER')
+                          .map(ldr => (
+                            <option key={ldr.id} value={ldr.id}>
+                              {ldr.name} ({ldr.code}) - {ldr.role === 'SALES_MANAGER' ? 'FLS' : 'TSE'}
+                            </option>
+                          ))
+                        }
+                      </select>
+                    </div>
 
-                      {/* Phone */}
-                      <div>
-                        <label className="text-slate-400 text-[10px] block font-semibold mb-0.5">Mobile Number</label>
-                        <input
-                          type="tel"
-                          value={agentLiveMatchRow.phone}
-                          onChange={(e) => setAgentLiveMatchRow({ ...agentLiveMatchRow, phone: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-white font-mono focus:border-emerald-500"
-                        />
-                      </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block font-semibold mb-0.5">Mobile Number</label>
+                      <input
+                        type="text"
+                        value={agentLiveMatchRow.phone || ''}
+                        onChange={(e) => setAgentLiveMatchRow({
+                          ...agentLiveMatchRow,
+                          phone: e.target.value,
+                          phoneChanged: Boolean(agentLiveMatchRow.oldPhone && e.target.value !== agentLiveMatchRow.oldPhone)
+                        })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-mono"
+                      />
                     </div>
                   </div>
+
                 </div>
 
-                {/* Modal Footer with Direct Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">
-                  <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-emerald-400">
-                    <input
-                      type="checkbox"
-                      checked={agentLiveMatchRow.isApproved}
-                      onChange={(e) => setAgentLiveMatchRow({ ...agentLiveMatchRow, isApproved: e.target.checked })}
-                      className="w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-600 focus:ring-emerald-500"
-                    />
-                    <span>Approved for merging into portal database</span>
-                  </label>
+                {/* Live Match Actions */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                  <span className="text-[11px] text-slate-400">
+                    Matches are saved locally to staging and ticked for merge
+                  </span>
 
                   <div className="flex items-center space-x-2">
-                    {agentLiveMatchRow.existingAgentRecord && (
+                    {agentLiveMatchRow.existingAgentId && (
                       <button
                         type="button"
                         onClick={() => {
-                          const ex = agentLiveMatchRow.existingAgentRecord;
                           setAgentLiveMatchRow({
                             ...agentLiveMatchRow,
-                            name: ex.name,
-                            joinedDate: ex.joinedDate || '2025-01-01',
-                            clubTier: ex.clubTier || 'Associate (15%)',
-                            phone: ex.phone || '',
-                            reportsToId: ex.reportsToId || '',
-                            reportsToName: ex.reportsToName || '',
+                            joinedDate: agentLiveMatchRow.oldJoinedDate || '2025-01-01',
+                            clubTier: agentLiveMatchRow.oldClubTier || 'Associate (15%)',
+                            currentPremium: agentLiveMatchRow.oldPremium || 0,
+                            phone: agentLiveMatchRow.oldPhone || agentLiveMatchRow.phone,
+                            reportsToName: agentLiveMatchRow.oldReportsToName || agentLiveMatchRow.reportsToName,
                             dateChanged: false,
                             clubChanged: false,
-                            phoneChanged: false
+                            premiumChanged: false,
+                            phoneChanged: false,
+                            leaderChanged: false,
+                            hasDiffs: false
                           });
                           showToast('Reverted right form to database values', 'info');
                         }}
                         className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition-colors"
                       >
-                        ↩️ Revert to Server Record
+                        🔄 Revert to Server Record
                       </button>
                     )}
 
@@ -21350,8 +21358,6 @@
               </div>
             </div>
           )}
-
-          {/* ====================================================== */}
           {/* MODAL: 📞 CUSTOMER FOLLOW-UP & AUDIT TRAIL MODAL      */}
           {/* ====================================================== */}
           {showRenewalFollowupModal && selectedRenewalForFollowup && (
