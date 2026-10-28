@@ -767,7 +767,108 @@
     const INITIAL_PRODUCTS = [];
 
     // 2. Agent Club Master (Central & Branch Clones)
-    const INITIAL_AGENT_CLUBS = [];
+    const INITIAL_AGENT_CLUBS = [
+      {
+        id: 'clb-os',
+        name: 'Club OS (Operating Scheme)',
+        code: 'CLB-CLUBOS-01',
+        period: 'Quarterly',
+        minVolume: 100000,
+        minPolicies: 4,
+        minActiveMonths: 1,
+        persistencyThreshold: 80,
+        payoutRatePercent: 15,
+        extraCreditPercent: 10,
+        extraCreditStartDate: '2026-10-01',
+        extraCreditEndDate: '2026-12-31',
+        benefits: 'Club OS Lapel Pin, Regional Felicitation & 15% Payout Slab Booster',
+        scope: 'CENTRAL',
+        sourceMasterId: null,
+        sourceMasterName: null,
+        branchId: null,
+        branchName: 'Corporate Central',
+        status: 'Active',
+        createdBy: 'Central HQ (Super Admin)',
+        createdAt: '2026-10-01',
+        updatedAt: '2026-10-28',
+        history: [{ timestamp: '2026-10-01 09:00', user: 'Central HQ', action: 'CREATED', details: 'Initialized Central Club OS Master' }]
+      },
+      {
+        id: 'clb-silver',
+        name: 'Silver Achiever Club',
+        code: 'CLB-SILVER-02',
+        period: 'Quarterly',
+        minVolume: 250000,
+        minPolicies: 8,
+        minActiveMonths: 1,
+        persistencyThreshold: 82,
+        payoutRatePercent: 18,
+        extraCreditPercent: 15,
+        extraCreditStartDate: '2026-10-01',
+        extraCreditEndDate: '2026-11-30',
+        benefits: 'Silver Trophy, Domestic Sales Convention Pass & 18% Payout Override',
+        scope: 'CENTRAL',
+        sourceMasterId: null,
+        sourceMasterName: null,
+        branchId: null,
+        branchName: 'Corporate Central',
+        status: 'Active',
+        createdBy: 'Central HQ (Super Admin)',
+        createdAt: '2026-10-01',
+        updatedAt: '2026-10-28',
+        history: [{ timestamp: '2026-10-01 09:00', user: 'Central HQ', action: 'CREATED', details: 'Initialized Central Silver Club' }]
+      },
+      {
+        id: 'clb-gold',
+        name: 'Gold Star Executive Club',
+        code: 'CLB-GOLD-03',
+        period: 'Quarterly',
+        minVolume: 500000,
+        minPolicies: 15,
+        minActiveMonths: 1,
+        persistencyThreshold: 85,
+        payoutRatePercent: 22,
+        extraCreditPercent: 20,
+        extraCreditStartDate: '2026-10-15',
+        extraCreditEndDate: '2026-12-31',
+        benefits: 'Gold Trophy, International Leadership Summit Entry & 22% Payout Override',
+        scope: 'CENTRAL',
+        sourceMasterId: null,
+        sourceMasterName: null,
+        branchId: null,
+        branchName: 'Corporate Central',
+        status: 'Active',
+        createdBy: 'Central HQ (Super Admin)',
+        createdAt: '2026-10-01',
+        updatedAt: '2026-10-28',
+        history: [{ timestamp: '2026-10-01 09:00', user: 'Central HQ', action: 'CREATED', details: 'Initialized Central Gold Club' }]
+      },
+      {
+        id: 'clb-chairman',
+        name: 'Chairman Diamond Elite Club',
+        code: 'CLB-CHAIR-04',
+        period: 'Annual',
+        minVolume: 1000000,
+        minPolicies: 25,
+        minActiveMonths: 1,
+        persistencyThreshold: 90,
+        payoutRatePercent: 28,
+        extraCreditPercent: 25,
+        extraCreditStartDate: '2026-10-01',
+        extraCreditEndDate: '2026-12-31',
+        benefits: 'Diamond Crown Memento, MD Excellence Award, Global Annual Convention with Spouse & 28% Payout Override',
+        scope: 'CENTRAL',
+        sourceMasterId: null,
+        sourceMasterName: null,
+        branchId: null,
+        branchName: 'Corporate Central',
+        status: 'Active',
+        createdBy: 'Central HQ (Super Admin)',
+        createdAt: '2026-10-01',
+        updatedAt: '2026-10-28',
+        history: [{ timestamp: '2026-10-01 09:00', user: 'Central HQ', action: 'CREATED', details: 'Initialized Central Chairman Diamond Club' }]
+      }
+    ];
 
     // 3. Flexible Monthly Contest Master with Central & Branch Cloned Scope
     const INITIAL_CONTESTS = [];
@@ -2880,10 +2981,19 @@
         remainingRampMonths = 0;
         clubWindowText = 'Final Ramp Month (M3)';
         clubStatusNote = 'Final fast-track ramp-up month: last opportunity to qualify under M0-M3 ramp-up club criteria';
+      } else if (diffMonths === 4) {
+        stage = 'M4';
+        label = 'Month 4 Joinee (M4 - GOS Window)';
+        shortTag = 'M4';
+        badgeClass = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 ring-1 ring-indigo-500/30';
+        isRampUp = true;
+        remainingRampMonths = 0;
+        clubWindowText = 'GOS Window (Up to M4)';
+        clubStatusNote = 'GOS eligibility window: eligible for GOS recognition slabs up to M4';
       } else {
-        stage = 'M4+';
-        label = 'Vintage Advisor (M4+ / ' + diffMonths + 'm)';
-        shortTag = 'M4+';
+        stage = 'M5+';
+        label = 'Vintage Advisor (M5+ / ' + diffMonths + 'm)';
+        shortTag = 'M5+';
         badgeClass = 'bg-slate-700/60 text-slate-300 border-slate-600';
         isRampUp = false;
         remainingRampMonths = 0;
@@ -5685,7 +5795,11 @@
       const [agentClubs, setAgentClubs] = useState(() => {
         try {
           const saved = localStorage.getItem('bms_agent_clubs_v1');
-          return saved ? JSON.parse(saved) : INITIAL_AGENT_CLUBS;
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+          return INITIAL_AGENT_CLUBS;
         } catch (e) {
           return INITIAL_AGENT_CLUBS;
         }
@@ -5738,9 +5852,12 @@
         period: 'Quarterly',
         minVolume: 200000,
         minPolicies: 6,
-        minActiveMonths: 2,
+        minActiveMonths: 1,
         persistencyThreshold: 80,
         payoutRatePercent: 22,
+        extraCreditPercent: 10,
+        extraCreditStartDate: '2026-10-01',
+        extraCreditEndDate: '2026-12-31',
         benefits: '',
         scope: 'CENTRAL',
         sourceMasterId: null,
@@ -5983,6 +6100,27 @@
       const [bdaStatusFilter, setBdaStatusFilter] = useState('ALL'); // 'ALL' | 'RISING_STAR' | 'M0_ACTIVE' | 'M1_ACTIVE' | 'PENDING'
       const [bdaSearchQuery, setBdaSearchQuery] = useState('');
       const [bdaLeaderFilter, setBdaLeaderFilter] = useState('ALL');
+
+      // ========================================================
+      // GOS (GO-GETTER ONBOARDING SCHEME) AGENTS TRACKER STATES
+      // Strictly Cohorts M0 to M4 only (diffMonths <= 4)
+      // Multi-Tier Recognition Slabs: Bronze, Silver, Gold, Diamond
+      // Base Hurdle default ₹15,000 (persisted in bms_gos_activation_hurdle_v1)
+      // ========================================================
+      const [gosActivationHurdle, setGosActivationHurdle] = useState(() => {
+        try {
+          const saved = localStorage.getItem('bms_gos_activation_hurdle_v1');
+          return saved ? Number(saved) : 15000;
+        } catch (e) {
+          return 15000;
+        }
+      });
+      const [gosHurdleInput, setGosHurdleInput] = useState(15000);
+      const [isEditingGosHurdle, setIsEditingGosHurdle] = useState(false);
+      const [gosCohortMonthFilter, setGosCohortMonthFilter] = useState('ALL'); // 'ALL' | 'M0' | 'M1' | 'M2' | 'M3' | 'M4' | YYYY-MM
+      const [gosSlabFilter, setGosSlabFilter] = useState('ALL'); // 'ALL' | 'DIAMOND' | 'GOLD' | 'SILVER' | 'BRONZE' | 'PENDING'
+      const [gosSearchQuery, setGosSearchQuery] = useState('');
+      const [gosLeaderFilter, setGosLeaderFilter] = useState('ALL');
 
       // ========================================================
       // AGENT EXCEL UPLOAD, ENROLLMENT & RECONCILIATION STATE
@@ -6677,6 +6815,289 @@
 
         return list;
       }, [bdaCohortData, bdaCohortMonthFilter, bdaStatusFilter, bdaLeaderFilter, bdaSearchQuery]);
+
+      // ========================================================
+      // GOS (GO-GETTER ONBOARDING SCHEME) COMPUTATION ENGINE
+      // Strictly Cohorts M0 to M4 (diffMonths <= 4)
+      // Multi-Tier Recognition Slabs:
+      //   🥉 Slab 1: GOS Bronze Starter  (Min NBP ₹15,000, 1 NOP, Fast-Track Pin)
+      //   🥈 Slab 2: GOS Silver Achiever (Min NBP ₹40,000, 2 NOP, Silver Trophy)
+      //   🥇 Slab 3: GOS Gold Star       (Min NBP ₹85,000, 4 NOP, Gold Memento)
+      //   💎 Slab 4: GOS Diamond Elite   (Min NBP ₹1,75,000, 6 NOP, Diamond Convention)
+      // ========================================================
+      const handleSaveGosHurdle = (newVal) => {
+        const val = Math.max(1000, Number(newVal) || 15000);
+        setGosActivationHurdle(val);
+        try { localStorage.setItem('bms_gos_activation_hurdle_v1', String(val)); } catch (e) {}
+        setIsEditingGosHurdle(false);
+        showToast(`✓ GOS Base Activation Hurdle updated to ₹${val.toLocaleString('en-IN')}! GOS qualifiers recalculated.`, 'success');
+      };
+
+      const GOS_RECOGNITION_SLABS = [
+        {
+          id: 'SLAB_1',
+          key: 'BRONZE',
+          name: 'GOS Bronze Starter',
+          emoji: '🥉',
+          minNbp: gosActivationHurdle,
+          minNop: 1,
+          incentiveRate: '15% Slab Booster',
+          badgeClass: 'bg-amber-900/40 text-amber-300 border border-amber-600/50',
+          trophy: 'Fast-Track Lapel Pin & Digital Certificate',
+          perk: 'GOS Fast-Track Induction & Welcome Kit'
+        },
+        {
+          id: 'SLAB_2',
+          key: 'SILVER',
+          name: 'GOS Silver Achiever',
+          emoji: '🥈',
+          minNbp: 40000,
+          minNop: 2,
+          incentiveRate: '20% Slab Booster',
+          badgeClass: 'bg-slate-400/20 text-slate-200 border border-slate-300/50',
+          trophy: 'Silver Go-Getter Trophy & Star Performer Pin',
+          perk: 'Quarterly Branch Recognition & Leadership Mentorship'
+        },
+        {
+          id: 'SLAB_3',
+          key: 'GOLD',
+          name: 'GOS Gold Star',
+          emoji: '🥇',
+          minNbp: 85000,
+          minNop: 4,
+          incentiveRate: '25% Slab Booster',
+          badgeClass: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/60 ring-1 ring-yellow-500/30',
+          trophy: 'Gold Star Executive Memento & Regional Meet Felicitation',
+          perk: 'Exclusive Regional Convention Pass & Executive Dinner'
+        },
+        {
+          id: 'SLAB_4',
+          key: 'DIAMOND',
+          name: 'GOS Diamond Elite Champion',
+          emoji: '💎',
+          minNbp: 175000,
+          minNop: 6,
+          incentiveRate: '30% Top Tier Booster',
+          badgeClass: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 ring-1 ring-cyan-400/40 shadow-sm shadow-cyan-500/20',
+          trophy: 'Diamond Champion Trophy & Annual Convention VIP Pass',
+          perk: 'All-Expense Paid Annual Convention & Direct MD Interaction'
+        }
+      ];
+
+      const gosLast5CohortMonths = [
+        { key: '2026-10', label: 'October 2026 (M0 Current)', short: 'Oct 2026', tag: 'M0', diffMonths: 0 },
+        { key: '2026-09', label: 'September 2026 (M1 Cohort)', short: 'Sep 2026', tag: 'M1', diffMonths: 1 },
+        { key: '2026-08', label: 'August 2026 (M2 Cohort)', short: 'Aug 2026', tag: 'M2', diffMonths: 2 },
+        { key: '2026-07', label: 'July 2026 (M3 Cohort)', short: 'Jul 2026', tag: 'M3', diffMonths: 3 },
+        { key: '2026-06', label: 'June 2026 (M4 Cohort)', short: 'Jun 2026', tag: 'M4', diffMonths: 4 }
+      ];
+
+      const gosCohortData = useMemo(() => {
+        // Target candidate agents in current branch (or branchTeam fallback)
+        const allAgents = ((currentTenantTeam && currentTenantTeam.length > 0)
+          ? currentTenantTeam
+          : (branchTeam || [])
+        ).filter(m => m.role === 'AGENT' && m.status !== 'Deleted');
+
+        const candidatePolicies = (currentTenantPolicies && currentTenantPolicies.length > 0)
+          ? currentTenantPolicies
+          : (policies || []);
+
+        // Filter: STRICTLY M0 to M4 ONLY (cohort.diffMonths <= 4)
+        const eligibleGosAgents = allAgents.filter(ag => {
+          const cohort = getAgentCohortInfo(ag);
+          return cohort.diffMonths <= 4;
+        });
+
+        // Enrich each eligible agent with M0..M4 monthly premiums, total NBP, NOP, and slab
+        const enrichedGosAgents = eligibleGosAgents.map(ag => {
+          const cohort = getAgentCohortInfo(ag);
+          const rawJoin = ag.joinedDate || '2026-10-01';
+          const joinMonth = rawJoin.slice(0, 7);
+
+          const m0Month = joinMonth;
+          const m1Month = addMonthsToYearMonth(joinMonth, 1);
+          const m2Month = addMonthsToYearMonth(joinMonth, 2);
+          const m3Month = addMonthsToYearMonth(joinMonth, 3);
+          const m4Month = addMonthsToYearMonth(joinMonth, 4);
+
+          const agPolicies = candidatePolicies.filter(p => {
+            const pCode = (p.agentCode || '').trim().toUpperCase();
+            const pName = (p.agentName || '').trim().toLowerCase();
+            return (pCode && pCode === (ag.code || '').trim().toUpperCase()) ||
+                   (pName && pName === (ag.name || '').trim().toLowerCase()) ||
+                   (p.agentId && p.agentId === ag.id);
+          });
+
+          const getMonthVol = (ym) => {
+            if (!ym) return 0;
+            return agPolicies
+              .filter(p => p.issueDate && p.issueDate.startsWith(ym))
+              .reduce((sum, p) => sum + (Number(p.premiumAmount) || 0), 0);
+          };
+
+          const m0Premium = getMonthVol(m0Month);
+          const m1Premium = getMonthVol(m1Month);
+          const m2Premium = getMonthVol(m2Month);
+          const m3Premium = getMonthVol(m3Month);
+          const m4Premium = getMonthVol(m4Month);
+
+          // Total NBP across the M0-M4 window
+          const totalGosNbp = m0Premium + m1Premium + m2Premium + m3Premium + m4Premium;
+          const totalGosNop = agPolicies.length;
+
+          // Determine Recognition Slab
+          let currentSlab = null;
+          let nextSlab = null;
+          let progressPercent = 0;
+          let gapToNextSlab = '';
+
+          if (totalGosNbp >= 175000 && totalGosNop >= 6) {
+            currentSlab = GOS_RECOGNITION_SLABS[3]; // Diamond
+            nextSlab = null;
+            progressPercent = 100;
+            gapToNextSlab = 'Apex Diamond Elite Champion Achieved!';
+          } else if (totalGosNbp >= 85000 && totalGosNop >= 4) {
+            currentSlab = GOS_RECOGNITION_SLABS[2]; // Gold
+            nextSlab = GOS_RECOGNITION_SLABS[3]; // Diamond
+            progressPercent = Math.min(99, Math.round((totalGosNbp / 175000) * 100));
+            gapToNextSlab = `₹${(175000 - totalGosNbp).toLocaleString('en-IN')} & ${Math.max(0, 6 - totalGosNop)} NOP to 💎 Diamond`;
+          } else if (totalGosNbp >= 40000 && totalGosNop >= 2) {
+            currentSlab = GOS_RECOGNITION_SLABS[1]; // Silver
+            nextSlab = GOS_RECOGNITION_SLABS[2]; // Gold
+            progressPercent = Math.min(99, Math.round((totalGosNbp / 85000) * 100));
+            gapToNextSlab = `₹${(85000 - totalGosNbp).toLocaleString('en-IN')} & ${Math.max(0, 4 - totalGosNop)} NOP to 🥇 Gold`;
+          } else if (totalGosNbp >= gosActivationHurdle && totalGosNop >= 1) {
+            currentSlab = GOS_RECOGNITION_SLABS[0]; // Bronze
+            nextSlab = GOS_RECOGNITION_SLABS[1]; // Silver
+            progressPercent = Math.min(99, Math.round((totalGosNbp / 40000) * 100));
+            gapToNextSlab = `₹${(40000 - totalGosNbp).toLocaleString('en-IN')} & ${Math.max(0, 2 - totalGosNop)} NOP to 🥈 Silver`;
+          } else {
+            currentSlab = null;
+            nextSlab = GOS_RECOGNITION_SLABS[0]; // Bronze
+            progressPercent = Math.min(99, Math.round((totalGosNbp / gosActivationHurdle) * 100));
+            gapToNextSlab = `₹${Math.max(0, gosActivationHurdle - totalGosNbp).toLocaleString('en-IN')} to 🥉 Bronze`;
+          }
+
+          return {
+            ...ag,
+            cohort,
+            joinMonth,
+            m0Month,
+            m1Month,
+            m2Month,
+            m3Month,
+            m4Month,
+            m0Premium,
+            m1Premium,
+            m2Premium,
+            m3Premium,
+            m4Premium,
+            totalGosNbp,
+            totalGosNop,
+            currentSlab,
+            nextSlab,
+            progressPercent,
+            gapToNextSlab,
+            isActivated: !!currentSlab
+          };
+        });
+
+        // Compute 5 Cohorts breakdown
+        const cohortRows = gosLast5CohortMonths.map(c => {
+          const agentsInCohort = enrichedGosAgents.filter(a => a.cohort.diffMonths === c.diffMonths || a.joinMonth === c.key);
+          const codesCount = agentsInCohort.length;
+          const activatedCount = agentsInCohort.filter(a => a.isActivated).length;
+          const bronzeCount = agentsInCohort.filter(a => a.currentSlab && a.currentSlab.key === 'BRONZE').length;
+          const silverCount = agentsInCohort.filter(a => a.currentSlab && a.currentSlab.key === 'SILVER').length;
+          const goldCount = agentsInCohort.filter(a => a.currentSlab && a.currentSlab.key === 'GOLD').length;
+          const diamondCount = agentsInCohort.filter(a => a.currentSlab && a.currentSlab.key === 'DIAMOND').length;
+          const totalCohortNbp = agentsInCohort.reduce((sum, a) => sum + a.totalGosNbp, 0);
+          const activationRate = codesCount > 0 ? ((activatedCount / codesCount) * 100).toFixed(1) : '0.0';
+
+          return {
+            ...c,
+            agents: agentsInCohort,
+            codesCount,
+            activatedCount,
+            bronzeCount,
+            silverCount,
+            goldCount,
+            diamondCount,
+            totalCohortNbp,
+            activationRate
+          };
+        });
+
+        // Grand Totals
+        const totalGosAgents = enrichedGosAgents.length;
+        const totalQualified = enrichedGosAgents.filter(a => a.isActivated).length;
+        const totalM0Agents = enrichedGosAgents.filter(a => a.cohort.diffMonths === 0).length;
+        const totalGosVolume = enrichedGosAgents.reduce((sum, a) => sum + a.totalGosNbp, 0);
+        const overallGosRate = totalGosAgents > 0 ? ((totalQualified / totalGosAgents) * 100).toFixed(1) : '0.0';
+
+        const bronzeCount = enrichedGosAgents.filter(a => a.currentSlab && a.currentSlab.key === 'BRONZE').length;
+        const silverCount = enrichedGosAgents.filter(a => a.currentSlab && a.currentSlab.key === 'SILVER').length;
+        const goldCount = enrichedGosAgents.filter(a => a.currentSlab && a.currentSlab.key === 'GOLD').length;
+        const diamondCount = enrichedGosAgents.filter(a => a.currentSlab && a.currentSlab.key === 'DIAMOND').length;
+        const pendingCount = enrichedGosAgents.filter(a => !a.isActivated).length;
+
+        return {
+          enrichedGosAgents,
+          cohortRows,
+          totalGosAgents,
+          totalQualified,
+          totalM0Agents,
+          totalGosVolume,
+          overallGosRate,
+          bronzeCount,
+          silverCount,
+          goldCount,
+          diamondCount,
+          pendingCount
+        };
+      }, [currentTenantTeam, branchTeam, currentTenantPolicies, policies, gosActivationHurdle]);
+
+      // Filtered GOS Advisor Roster for display
+      const filteredGosAgentsList = useMemo(() => {
+        let list = [...(gosCohortData.enrichedGosAgents || [])];
+
+        // Filter by Cohort Month / Tag
+        if (gosCohortMonthFilter !== 'ALL') {
+          list = list.filter(a => a.cohort.stage === gosCohortMonthFilter || a.joinMonth === gosCohortMonthFilter);
+        }
+
+        // Filter by Slab
+        if (gosSlabFilter === 'DIAMOND') {
+          list = list.filter(a => a.currentSlab && a.currentSlab.key === 'DIAMOND');
+        } else if (gosSlabFilter === 'GOLD') {
+          list = list.filter(a => a.currentSlab && a.currentSlab.key === 'GOLD');
+        } else if (gosSlabFilter === 'SILVER') {
+          list = list.filter(a => a.currentSlab && a.currentSlab.key === 'SILVER');
+        } else if (gosSlabFilter === 'BRONZE') {
+          list = list.filter(a => a.currentSlab && a.currentSlab.key === 'BRONZE');
+        } else if (gosSlabFilter === 'PENDING') {
+          list = list.filter(a => !a.isActivated);
+        }
+
+        // Filter by Leader / DL
+        if (gosLeaderFilter !== 'ALL') {
+          list = list.filter(a => a.reportsToId === gosLeaderFilter || (a.reportsToName && a.reportsToName.includes(gosLeaderFilter)));
+        }
+
+        // Search query
+        if (gosSearchQuery.trim()) {
+          const q = gosSearchQuery.toLowerCase().trim();
+          list = list.filter(a =>
+            (a.name || '').toLowerCase().includes(q) ||
+            (a.code || '').toLowerCase().includes(q) ||
+            (a.phone || '').toLowerCase().includes(q) ||
+            (a.reportsToName || '').toLowerCase().includes(q)
+          );
+        }
+
+        return list;
+      }, [gosCohortData, gosCohortMonthFilter, gosSlabFilter, gosLeaderFilter, gosSearchQuery]);
 
       // ========================================================
       // EXCEL / CSV AGENT IMPORT & INLINE STAGING HANDLERS
@@ -8416,7 +8837,12 @@
         const isSuperAdmin = viewMode === 'SUPER_ADMIN' || (currentUser && currentUser.role === 'SUPER_ADMIN');
         setClubModalMode(mode);
         if (mode === 'EDIT' && club) {
-          setClubForm({ ...club });
+          setClubForm({
+            ...club,
+            extraCreditPercent: club.extraCreditPercent !== undefined ? club.extraCreditPercent : 10,
+            extraCreditStartDate: club.extraCreditStartDate || '2026-10-01',
+            extraCreditEndDate: club.extraCreditEndDate || '2026-12-31'
+          });
         } else {
           setClubForm({
             id: '',
@@ -8425,9 +8851,12 @@
             period: 'Quarterly',
             minVolume: 200000,
             minPolicies: 6,
-            minActiveMonths: 2,
+            minActiveMonths: 1,
             persistencyThreshold: 80,
             payoutRatePercent: 22,
+            extraCreditPercent: 10,
+            extraCreditStartDate: '2026-10-01',
+            extraCreditEndDate: '2026-12-31',
             benefits: '',
             scope: isSuperAdmin ? 'CENTRAL' : 'BRANCH_CUSTOM',
             sourceMasterId: null,
@@ -8448,15 +8877,23 @@
         const userLabel = currentUser ? currentUser.name : (isSuperAdmin ? 'Super Admin' : 'Branch Manager');
         const currentBranch = selectedTenant || { id: 'tnt-101', branchLocation: 'Thodupuzha Branch' };
 
+        // Auto-generate club code internally so UI doesn't require user input
+        const cleanName = (clubForm.name || 'CLUB').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+        const autoCode = clubForm.code || `CLB-${cleanName}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
         if (clubModalMode === 'CREATE') {
           const newRecord = {
             ...clubForm,
             id: 'clb-' + Date.now(),
+            code: autoCode,
             minVolume: Number(clubForm.minVolume) || 100000,
             minPolicies: Number(clubForm.minPolicies) || 4,
-            minActiveMonths: Number(clubForm.minActiveMonths) || 1,
+            minActiveMonths: 1,
             persistencyThreshold: Number(clubForm.persistencyThreshold) || 75,
             payoutRatePercent: Number(clubForm.payoutRatePercent) || 18,
+            extraCreditPercent: Number(clubForm.extraCreditPercent) || 0,
+            extraCreditStartDate: clubForm.extraCreditStartDate || '',
+            extraCreditEndDate: clubForm.extraCreditEndDate || '',
             scope: isSuperAdmin ? 'CENTRAL' : 'BRANCH_CUSTOM',
             sourceMasterId: null,
             sourceMasterName: null,
@@ -8466,7 +8903,7 @@
             createdAt: dateStr,
             updatedAt: dateStr,
             history: [
-              { timestamp: nowStr, user: userLabel, action: 'CREATED', details: `Created new ${isSuperAdmin ? 'Central' : 'Branch Custom'} Club` }
+              { timestamp: nowStr, user: userLabel, action: 'CREATED', details: `Created new ${isSuperAdmin ? 'Central' : 'Branch Custom'} Club with Minimum NBP ₹${(Number(clubForm.minVolume) || 100000).toLocaleString('en-IN')}` }
             ]
           };
           setAgentClubs(prev => [newRecord, ...prev]);
@@ -8478,14 +8915,18 @@
               return {
                 ...c,
                 ...clubForm,
+                code: c.code || autoCode,
                 minVolume: Number(clubForm.minVolume) || 100000,
                 minPolicies: Number(clubForm.minPolicies) || 4,
-                minActiveMonths: Number(clubForm.minActiveMonths) || 1,
+                minActiveMonths: 1,
                 persistencyThreshold: Number(clubForm.persistencyThreshold) || 75,
                 payoutRatePercent: Number(clubForm.payoutRatePercent) || 18,
+                extraCreditPercent: Number(clubForm.extraCreditPercent) || 0,
+                extraCreditStartDate: clubForm.extraCreditStartDate || '',
+                extraCreditEndDate: clubForm.extraCreditEndDate || '',
                 updatedAt: dateStr,
                 history: [
-                  { timestamp: nowStr, user: userLabel, action: 'MODIFIED', details: 'Updated club targets & criteria' },
+                  { timestamp: nowStr, user: userLabel, action: 'MODIFIED', details: 'Updated club Minimum NBP hurdle & extra credit booster date range' },
                   ...(c.history || [])
                 ]
               };
@@ -10571,6 +11012,23 @@
                       {!isSidebarCollapsed && (
                         <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
                           M0-M3
+                        </span>
+                      )}
+                    </button>
+
+                    {/* 4c. GOS Agents Tracker (Cohorts M0-M4 Slabs & Recognitions) */}
+                    <button
+                      onClick={() => {
+                        setActiveTab('tenant_gos_activation');
+                      }}
+                      className={`sidebar-nav-btn ${activeTab === 'tenant_gos_activation' ? 'active' : ''}`}
+                      title="GOS Agents Performance Tracker (Cohorts M0-M4, Multi-Tier Slabs & Special Recognitions)"
+                    >
+                      <span className="text-sm mr-2">🚀</span>
+                      {!isSidebarCollapsed && <span className="flex-1 truncate">GOS Agents</span>}
+                      {!isSidebarCollapsed && (
+                        <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                          M0-M4
                         </span>
                       )}
                     </button>
@@ -13408,6 +13866,15 @@
                         <span>BDA Activation (6M)</span>
                       </button>
                       <button
+                        type="button"
+                        onClick={() => setActiveTab('tenant_gos_activation')}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white flex items-center space-x-1.5 shadow-md transition-all"
+                        title="Track GOS Agents (M0-M4 Cohorts) with multi-tier recognition slabs & honours"
+                      >
+                        <span>🚀</span>
+                        <span>GOS Agents (M0-M4)</span>
+                      </button>
+                      <button
                         onClick={() => handleOpenCreateMemberModal('AGENT')}
                         className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md flex items-center space-x-1"
                       >
@@ -14376,6 +14843,15 @@
                               <span>🎯</span>
                               <span>BDA Activation (6M)</span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('tenant_gos_activation')}
+                              className="px-3 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white flex items-center space-x-1.5 shadow-md shadow-purple-900/30 transition-all"
+                              title="GOS Agents Performance Tracker (M0-M4 Cohorts)"
+                            >
+                              <span>🚀</span>
+                              <span>GOS Agents (M0-M4)</span>
+                            </button>
                           </>
                         )}
                         <button
@@ -14679,7 +15155,7 @@
 
                                     <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
                                       <div>
-                                        <span className="text-slate-500 block text-[10px]">Volume Hurdle:</span>
+                                        <span className="text-slate-500 block text-[10px]">Minimum NBP:</span>
                                         <span className="font-bold text-white font-mono">₹{club.minVolume.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div>
@@ -14695,6 +15171,19 @@
                                         <span className="font-bold text-amber-400 font-mono">+{club.payoutRatePercent}% Slab</span>
                                       </div>
                                     </div>
+
+                                    {/* Extra Credit Booster Date Range Badge */}
+                                    {club.extraCreditPercent > 0 && club.extraCreditStartDate && club.extraCreditEndDate && (
+                                      <div className="mt-2.5 bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border border-purple-800/60 rounded-xl p-2 flex items-center justify-between text-[11px]">
+                                        <span className="text-purple-300 font-bold flex items-center space-x-1">
+                                          <span>⚡</span>
+                                          <span>+{club.extraCreditPercent}% Extra Credit Booster</span>
+                                        </span>
+                                        <span className="text-purple-400 font-mono text-[10px]">
+                                          {club.extraCreditStartDate} → {club.extraCreditEndDate}
+                                        </span>
+                                      </div>
+                                    )}
 
                                     <p className="text-xs text-slate-400 mt-2 line-clamp-2">{club.benefits}</p>
                                   </div>
@@ -16059,6 +16548,563 @@
                                     <span>📞</span>
                                     <span>Call</span>
                                   </a>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================== */}
+            {/* VIEW: 🚀 GOS (GO-GETTER ONBOARDING SCHEME) AGENTS TRACKER */}
+            {/* Cohorts M0-M4 Only • Multi-Tier Recognition Slabs & Honours */}
+            {/* ====================================================== */}
+            {activeTab === 'tenant_gos_activation' && (
+              <div className="space-y-6 animate-fadeIn pb-12">
+                {/* 1. Header Banner */}
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xl">🚀</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-purple-400">
+                        Go-Getter Onboarding Scheme (GOS) • Fast-Track New Joinee Acceleration
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-black text-white mt-1 flex items-center space-x-2">
+                      <span>GOS Agents Performance Tracker (Cohorts M0 – M4 Only)</span>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Exclusively tracking advisors coded in <strong className="text-purple-400 font-mono">M0, M1, M2, M3 & M4</strong> • Base Hurdle: <strong className="text-amber-400 font-mono">₹{gosActivationHurdle.toLocaleString('en-IN')}</strong> • Multi-tier honours from <strong className="text-amber-400">🥉 Bronze Starter</strong> to <strong className="text-cyan-400">💎 Diamond Elite Champion</strong>.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentExcelImportModal(true)}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/40 flex items-center space-x-1.5 shadow transition-all"
+                      title="Upload Excel or CSV to bulk import agents or update phone numbers"
+                    >
+                      <span>📥</span>
+                      <span>Bulk Upload Excel / CSV</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCreateMemberModal('AGENT')}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white flex items-center space-x-1.5 shadow-md shadow-purple-950/40 transition-all"
+                    >
+                      <span>🚀</span>
+                      <span>+ Create GOS Agent</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('tenant_agents')}
+                      className="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+                    >
+                      ← Agents Directory
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Top Summary KPI Cards (5 Cards) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  {/* Total GOS Eligible Agents (M0-M4) */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">GOS Eligible (M0-M4)</div>
+                    <div className="text-2xl font-black text-white mt-1 font-mono">
+                      {gosCohortData.totalGosAgents}
+                    </div>
+                    <div className="text-[11px] text-purple-400 mt-1 flex items-center space-x-1">
+                      <span>🎯 Cohorts diff ≤ 4 months</span>
+                    </div>
+                  </div>
+
+                  {/* M0 Current Joinees (Oct 2026) */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">M0 Current Joinees</div>
+                    <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">
+                      {gosCohortData.totalM0Agents}
+                    </div>
+                    <div className="text-[11px] text-emerald-400 mt-1 flex items-center space-x-1">
+                      <span>🌱 Newly Coded This Month</span>
+                    </div>
+                  </div>
+
+                  {/* Total Slab Qualifiers */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">Total Slab Qualifiers</div>
+                    <div className="text-2xl font-black text-amber-400 mt-1 font-mono">
+                      {gosCohortData.totalQualified}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      {gosCohortData.pendingCount} in progression queue
+                    </div>
+                  </div>
+
+                  {/* Total GOS NBP Generated */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">Total GOS NBP (₹)</div>
+                    <div className="text-2xl font-black text-sky-400 mt-1 font-mono">
+                      ₹{formatINR(gosCohortData.totalGosVolume)}
+                    </div>
+                    <div className="text-[11px] text-sky-300 mt-1">
+                      M0-M4 cumulative volume
+                    </div>
+                  </div>
+
+                  {/* Overall GOS Activation Rate */}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">Activation Rate</div>
+                    <div className="text-2xl font-black text-purple-300 mt-1 font-mono">
+                      {gosCohortData.overallGosRate}%
+                    </div>
+                    <div className="text-[11px] text-purple-400 mt-1">
+                      Base Hurdle: ₹{gosActivationHurdle.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. GOS Recognition Slabs & Honours Matrix */}
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">🏆</span>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                        GOS Recognition Slabs & Honours Matrix
+                      </h3>
+                    </div>
+                    <span className="text-[11px] text-purple-300 font-medium">
+                      Multi-tier incentive boosters & executive recognitions for M0-M4 achievers
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                    {/* Slab 1: Bronze Starter */}
+                    <div className="bg-slate-950 border border-amber-800/40 rounded-xl p-4 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">🥉</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/40 text-amber-300 border border-amber-700/50">
+                          {gosCohortData.bronzeCount} Qualifiers
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-amber-300 text-sm">Slab 1: GOS Bronze Starter</h4>
+                        <div className="text-xs text-white font-mono mt-0.5">
+                          Min NBP: <strong>₹{gosActivationHurdle.toLocaleString('en-IN')}</strong> • Min 1 NOP
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-slate-800">
+                        <div>⚡ Incentive: <strong className="text-amber-300">15% Slab Booster</strong></div>
+                        <div>🎖️ Memento: <span className="text-slate-300">Fast-Track Lapel Pin & Certificate</span></div>
+                      </div>
+                    </div>
+
+                    {/* Slab 2: Silver Achiever */}
+                    <div className="bg-slate-950 border border-slate-700/60 rounded-xl p-4 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">🥈</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-400/20 text-slate-200 border border-slate-400/40">
+                          {gosCohortData.silverCount} Qualifiers
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-200 text-sm">Slab 2: GOS Silver Achiever</h4>
+                        <div className="text-xs text-white font-mono mt-0.5">
+                          Min NBP: <strong>₹40,000</strong> • Min 2 NOP
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-slate-800">
+                        <div>⚡ Incentive: <strong className="text-slate-200">20% Slab Booster</strong></div>
+                        <div>🎖️ Memento: <span className="text-slate-300">Silver Go-Getter Trophy & Star Badge</span></div>
+                      </div>
+                    </div>
+
+                    {/* Slab 3: Gold Star */}
+                    <div className="bg-slate-950 border border-yellow-700/50 rounded-xl p-4 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">🥇</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/40">
+                          {gosCohortData.goldCount} Qualifiers
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-yellow-300 text-sm">Slab 3: GOS Gold Star</h4>
+                        <div className="text-xs text-white font-mono mt-0.5">
+                          Min NBP: <strong>₹85,000</strong> • Min 4 NOP
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-slate-800">
+                        <div>⚡ Incentive: <strong className="text-yellow-300">25% Slab Booster</strong></div>
+                        <div>🎖️ Memento: <span className="text-slate-300">Gold Star Executive Memento & Meet</span></div>
+                      </div>
+                    </div>
+
+                    {/* Slab 4: Diamond Elite */}
+                    <div className="bg-slate-950 border border-cyan-700/60 rounded-xl p-4 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">💎</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 ring-1 ring-cyan-400/40">
+                          {gosCohortData.diamondCount} Champions
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-cyan-300 text-sm">Slab 4: GOS Diamond Elite</h4>
+                        <div className="text-xs text-white font-mono mt-0.5">
+                          Min NBP: <strong>₹1,75,000</strong> • Min 6 NOP
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-slate-800">
+                        <div>⚡ Incentive: <strong className="text-cyan-300">30% Top Tier Booster</strong></div>
+                        <div>🎖️ Memento: <span className="text-slate-300">Diamond Trophy & Annual Convention Pass</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. GOS 5-Cohort Performance Matrix Table (M0 to M4) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                  <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-base">📊</span>
+                      <h3 className="font-bold text-white text-sm">
+                        GOS Cohorts Performance Matrix (M0 – M4)
+                      </h3>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      5 Active Cohort Months under GOS Consideration
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-3">Cohort Month & Tag</th>
+                          <th className="p-3 text-center">Codes Generated</th>
+                          <th className="p-3 text-center">Activated (≥ Hurdle)</th>
+                          <th className="p-3 text-center">Slabs Breakdown</th>
+                          <th className="p-3 text-right">Total NBP (₹)</th>
+                          <th className="p-3 text-center">Activation %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {gosCohortData.cohortRows.map(row => (
+                          <tr key={row.key} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="p-3 font-semibold text-white flex items-center space-x-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                row.tag === 'M0' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                                row.tag === 'M1' ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40' :
+                                row.tag === 'M2' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' :
+                                row.tag === 'M3' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                                'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                              }`}>
+                                {row.tag}
+                              </span>
+                              <span>{row.label}</span>
+                            </td>
+                            <td className="p-3 text-center font-mono font-bold text-white">
+                              {row.codesCount}
+                            </td>
+                            <td className="p-3 text-center font-mono font-bold text-emerald-400">
+                              {row.activatedCount}
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center space-x-1.5 text-[11px]">
+                                <span className="text-amber-300" title="Bronze">🥉 {row.bronzeCount}</span>
+                                <span className="text-slate-300" title="Silver">🥈 {row.silverCount}</span>
+                                <span className="text-yellow-300" title="Gold">🥇 {row.goldCount}</span>
+                                <span className="text-cyan-300 font-bold" title="Diamond">💎 {row.diamondCount}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold text-sky-400">
+                              ₹{formatINR(row.totalCohortNbp)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 font-mono">
+                                {row.activationRate}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 5. GOS Advisor Roster & Filters Toolbar */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden space-y-4 p-5">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-base">👥</span>
+                      <h3 className="font-bold text-white text-sm">
+                        GOS Advisor Roster & Performance Matrix ({filteredGosAgentsList.length} Advisors)
+                      </h3>
+                    </div>
+
+                    {/* Hurdle Editor Widget */}
+                    <div className="flex items-center space-x-2 text-xs">
+                      <span className="text-slate-400">Base Activation Hurdle:</span>
+                      {isEditingGosHurdle ? (
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="number"
+                            min="1000"
+                            step="1000"
+                            value={gosHurdleInput}
+                            onChange={(e) => setGosHurdleInput(e.target.value)}
+                            className="w-24 bg-slate-950 border border-purple-500 rounded-lg px-2 py-1 text-white font-mono text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveGosHurdle(gosHurdleInput)}
+                            className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingGosHurdle(false)}
+                            className="px-2 py-1 bg-slate-800 text-slate-400 rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1.5">
+                          <span className="font-mono font-bold text-amber-400">
+                            ₹{gosActivationHurdle.toLocaleString('en-IN')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGosHurdleInput(gosActivationHurdle);
+                              setIsEditingGosHurdle(true);
+                            }}
+                            className="text-slate-400 hover:text-purple-300 text-[11px] underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Filter Toolbar */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    {/* Search */}
+                    <div>
+                      <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Search Advisor</label>
+                      <input
+                        type="text"
+                        value={gosSearchQuery}
+                        onChange={(e) => setGosSearchQuery(e.target.value)}
+                        placeholder="Search name, code, phone, DL..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs"
+                      />
+                    </div>
+
+                    {/* Cohort Filter */}
+                    <div>
+                      <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Cohort Month (M0-M4)</label>
+                      <select
+                        value={gosCohortMonthFilter}
+                        onChange={(e) => setGosCohortMonthFilter(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs"
+                      >
+                        <option value="ALL">All GOS Cohorts (M0 – M4)</option>
+                        <option value="M0">M0 – October 2026 (Current Joinees)</option>
+                        <option value="M1">M1 – September 2026</option>
+                        <option value="M2">M2 – August 2026</option>
+                        <option value="M3">M3 – July 2026</option>
+                        <option value="M4">M4 – June 2026</option>
+                      </select>
+                    </div>
+
+                    {/* Slab Filter */}
+                    <div>
+                      <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Recognition Slab</label>
+                      <select
+                        value={gosSlabFilter}
+                        onChange={(e) => setGosSlabFilter(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs"
+                      >
+                        <option value="ALL">All Slabs & Statuses</option>
+                        <option value="DIAMOND">💎 Slab 4: Diamond Elite Champion</option>
+                        <option value="GOLD">🥇 Slab 3: Gold Star</option>
+                        <option value="SILVER">🥈 Slab 2: Silver Achiever</option>
+                        <option value="BRONZE">🥉 Slab 1: Bronze Starter</option>
+                        <option value="PENDING">🌱 In Progress / Pending</option>
+                      </select>
+                    </div>
+
+                    {/* Leader Filter */}
+                    <div>
+                      <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Distribution Leader (DL)</label>
+                      <select
+                        value={gosLeaderFilter}
+                        onChange={(e) => setGosLeaderFilter(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs"
+                      >
+                        <option value="ALL">All Distribution Leaders</option>
+                        {Array.from(new Set(gosCohortData.enrichedGosAgents.map(a => a.reportsToName).filter(Boolean))).map(dl => (
+                          <option key={dl} value={dl}>{dl}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Roster Table */}
+                  <div className="overflow-x-auto rounded-xl border border-slate-800">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-3">Advisor Details</th>
+                          <th className="p-3">Distribution Leader</th>
+                          <th className="p-3 text-center">Cohort</th>
+                          <th className="p-3 text-center">Code Generated</th>
+                          <th className="p-3 text-right">M0 NBP</th>
+                          <th className="p-3 text-right">M1 NBP</th>
+                          <th className="p-3 text-right">M2-M4 NBP</th>
+                          <th className="p-3 text-right">Total GOS NBP</th>
+                          <th className="p-3 text-center">Current Slab & Perks</th>
+                          <th className="p-3 text-center">Next Target Gap</th>
+                          <th className="p-3 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {filteredGosAgentsList.length === 0 ? (
+                          <tr>
+                            <td colSpan="11" className="p-8 text-center text-slate-500">
+                              No GOS advisors found matching current filter criteria.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredGosAgentsList.map(ag => {
+                            const c = ag.cohort;
+                            const m234 = ag.m2Premium + ag.m3Premium + ag.m4Premium;
+
+                            return (
+                              <tr key={ag.id} className="hover:bg-slate-800/40 transition-colors">
+                                {/* Advisor Details */}
+                                <td className="p-3">
+                                  <div className="font-bold text-white flex items-center space-x-1.5">
+                                    <span>{ag.name}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-mono flex items-center space-x-2 mt-0.5">
+                                    <span>Code: <strong className="text-purple-300">{ag.code}</strong></span>
+                                    <span>•</span>
+                                    <span>{ag.phone}</span>
+                                  </div>
+                                </td>
+
+                                {/* Distribution Leader */}
+                                <td className="p-3 text-slate-300">
+                                  <span className="font-medium">{ag.reportsToName || 'Direct Branch'}</span>
+                                </td>
+
+                                {/* Cohort Badge */}
+                                <td className="p-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                    c.stage === 'M0' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                                    c.stage === 'M1' ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40' :
+                                    c.stage === 'M2' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' :
+                                    c.stage === 'M3' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                                    'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                                  }`}>
+                                    {c.stage}
+                                  </span>
+                                </td>
+
+                                {/* Code Generated Date */}
+                                <td className="p-3 text-center font-mono text-[11px] text-slate-400">
+                                  {ag.joinedDate || ag.createdDate || '—'}
+                                </td>
+
+                                {/* M0 NBP */}
+                                <td className="p-3 text-right font-mono text-slate-300">
+                                  ₹{formatINR(ag.m0Premium)}
+                                </td>
+
+                                {/* M1 NBP */}
+                                <td className="p-3 text-right font-mono text-slate-300">
+                                  ₹{formatINR(ag.m1Premium)}
+                                </td>
+
+                                {/* M2-M4 NBP */}
+                                <td className="p-3 text-right font-mono text-slate-300">
+                                  ₹{formatINR(m234)}
+                                </td>
+
+                                {/* Total GOS NBP */}
+                                <td className="p-3 text-right">
+                                  <div className="font-mono font-bold text-sky-400">
+                                    ₹{formatINR(ag.totalGosNbp)}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 font-mono">
+                                    {ag.totalGosNop} Policies (NOP)
+                                  </div>
+                                </td>
+
+                                {/* Current Slab & Perks */}
+                                <td className="p-3 text-center">
+                                  {ag.currentSlab ? (
+                                    <div className="space-y-0.5">
+                                      <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${ag.currentSlab.badgeClass}`}>
+                                        <span>{ag.currentSlab.emoji}</span>
+                                        <span>{ag.currentSlab.name}</span>
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 block truncate max-w-[150px]" title={ag.currentSlab.trophy}>
+                                        {ag.currentSlab.trophy}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">
+                                      🌱 In Progress
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Next Target Gap */}
+                                <td className="p-3 text-center">
+                                  <div className="text-[10px] font-mono text-slate-300 max-w-[160px]">
+                                    {ag.gapToNextSlab}
+                                  </div>
+                                  <div className="w-24 bg-slate-800 h-1.5 rounded-full mx-auto mt-1 overflow-hidden">
+                                    <div
+                                      className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all"
+                                      style={{ width: `${ag.progressPercent}%` }}
+                                    ></div>
+                                  </div>
+                                </td>
+
+                                {/* Actions */}
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center space-x-1.5">
+                                    <a
+                                      href={`tel:${ag.phone}`}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] inline-flex items-center space-x-1 shadow transition-colors"
+                                      title="Call Advisor"
+                                    >
+                                      <span>📞</span>
+                                      <span>Call</span>
+                                    </a>
+                                    {ag.phone && (
+                                      <a
+                                        href={`https://wa.me/91${ag.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${ag.name}, Congratulations on your GOS Performance! Your current GOS NBP is ₹${formatINR(ag.totalGosNbp)}. Let's achieve the next recognition slab together!`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 border border-emerald-600/50 rounded-lg text-[11px] font-bold"
+                                        title="Send WhatsApp Motivation"
+                                      >
+                                        💬
+                                      </a>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -25931,6 +26977,7 @@
                 </div>
 
                 <form onSubmit={handleSaveClub} className="space-y-3">
+                  {/* Row 1: Club Name & Evaluation Period (Club Code removed from UI per specification) */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 mb-1 font-semibold">Club Name *</label>
@@ -25944,21 +26991,7 @@
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Club Code *</label>
-                      <input
-                        type="text"
-                        required
-                        value={clubForm.code}
-                        onChange={(e) => setClubForm({ ...clubForm, code: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                        placeholder="e.g. CLB-GLD"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Period</label>
+                      <label className="block text-slate-400 mb-1 font-semibold">Evaluation Period</label>
                       <select
                         value={clubForm.period}
                         onChange={(e) => setClubForm({ ...clubForm, period: e.target.value })}
@@ -25969,8 +27002,12 @@
                         <option value="Annual">Annual</option>
                       </select>
                     </div>
+                  </div>
+
+                  {/* Row 2: Minimum NBP & Min Policies (NOP) */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Min Volume (₹) *</label>
+                      <label className="block text-slate-400 mb-1 font-semibold">Minimum NBP (₹) *</label>
                       <input
                         type="number"
                         required
@@ -25978,10 +27015,12 @@
                         value={clubForm.minVolume}
                         onChange={(e) => setClubForm({ ...clubForm, minVolume: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                        placeholder="e.g. 200000"
                       />
+                      <span className="text-[10px] text-slate-500">New Business Premium volume hurdle</span>
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Min Policies *</label>
+                      <label className="block text-slate-400 mb-1 font-semibold">Min Policies (NOP) *</label>
                       <input
                         type="number"
                         required
@@ -25989,23 +27028,14 @@
                         value={clubForm.minPolicies}
                         onChange={(e) => setClubForm({ ...clubForm, minPolicies: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                        placeholder="e.g. 4"
                       />
+                      <span className="text-[10px] text-slate-500">Minimum number of policies required</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Active Months</label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        max="12"
-                        value={clubForm.minActiveMonths}
-                        onChange={(e) => setClubForm({ ...clubForm, minActiveMonths: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                      />
-                    </div>
+                  {/* Row 3: Persistency & Payout Slab (Active Months removed from UI per specification) */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 mb-1 font-semibold">Persistency (%)</label>
                       <input
@@ -26019,7 +27049,7 @@
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Payout Slab (%)</label>
+                      <label className="block text-slate-400 mb-1 font-semibold">Payout Slab Booster (%)</label>
                       <input
                         type="number"
                         required
@@ -26030,6 +27060,52 @@
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
                       />
                     </div>
+                  </div>
+
+                  {/* Row 4: Extra Credit (%) and Date Range Window */}
+                  <div className="bg-purple-950/30 border border-purple-800/50 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">⚡</span>
+                        <span className="font-bold text-purple-300 text-xs">Extra Credit Booster & Promotional Date Range</span>
+                      </div>
+                      <span className="text-[10px] text-purple-400 font-mono">Business done in range earns extra credit</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold text-[11px]">Extra Credit (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={clubForm.extraCreditPercent || ''}
+                          onChange={(e) => setClubForm({ ...clubForm, extraCreditPercent: e.target.value })}
+                          placeholder="e.g. 10"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold text-[11px]">Range Start Date</label>
+                        <input
+                          type="date"
+                          value={clubForm.extraCreditStartDate || ''}
+                          onChange={(e) => setClubForm({ ...clubForm, extraCreditStartDate: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold text-[11px]">Range End Date</label>
+                        <input
+                          type="date"
+                          value={clubForm.extraCreditEndDate || ''}
+                          onChange={(e) => setClubForm({ ...clubForm, extraCreditEndDate: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-purple-300/80 leading-relaxed">
+                      💡 Any business done within this date window will automatically receive an extra credit booster of {clubForm.extraCreditPercent || 0}% toward the Minimum NBP qualification hurdle.
+                    </p>
                   </div>
 
                   <div>
@@ -26963,11 +28039,17 @@
                     {selectedMasterType === 'CLUB' && (
                       <>
                         <div><span className="text-slate-500 block">Period:</span> <span className="font-bold text-white">{selectedMasterDetail.period}</span></div>
-                        <div><span className="text-slate-500 block">Volume Target:</span> <span className="font-bold text-white font-mono">₹{selectedMasterDetail.minVolume.toLocaleString('en-IN')}</span></div>
+                        <div><span className="text-slate-500 block">Minimum NBP:</span> <span className="font-bold text-white font-mono">₹{selectedMasterDetail.minVolume.toLocaleString('en-IN')}</span></div>
                         <div><span className="text-slate-500 block">Policies Hurdle:</span> <span className="font-bold text-sky-400 font-mono">{selectedMasterDetail.minPolicies} Policies</span></div>
-                        <div><span className="text-slate-500 block">Active Months:</span> <span className="font-bold text-white font-mono">{selectedMasterDetail.minActiveMonths} Mo</span></div>
                         <div><span className="text-slate-500 block">Persistency:</span> <span className="font-bold text-emerald-400 font-mono">{selectedMasterDetail.persistencyThreshold}%</span></div>
-                        <div><span className="text-slate-500 block">Payout Override:</span> <span className="font-bold text-amber-400 font-mono">{selectedMasterDetail.payoutRatePercent}%</span></div>
+                        <div><span className="text-slate-500 block">Payout Override:</span> <span className="font-bold text-amber-400 font-mono">+{selectedMasterDetail.payoutRatePercent}% Slab</span></div>
+                        {selectedMasterDetail.extraCreditPercent > 0 && selectedMasterDetail.extraCreditStartDate && selectedMasterDetail.extraCreditEndDate && (
+                          <div className="col-span-2 pt-1 border-t border-slate-800">
+                            <span className="text-purple-400 block font-bold">⚡ Extra Credit Booster Window:</span>
+                            <span className="font-bold text-white font-mono">+{selectedMasterDetail.extraCreditPercent}% Extra Credit</span>
+                            <span className="text-purple-300 text-[10px] ml-2">({selectedMasterDetail.extraCreditStartDate} → {selectedMasterDetail.extraCreditEndDate})</span>
+                          </div>
+                        )}
                       </>
                     )}
 
